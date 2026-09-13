@@ -12,7 +12,7 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Célula de Monitoramento: Morro do Saboó")
 st.markdown(
-    "Painel operacional auditável com integração automática à tabela oficial de pluviometria da Prefeitura de Santos."
+    "Painel operacional auditável com integração automática à tabela oficial de pluviometria da Prefeitura de Santos e análise gráfica diária."
 )
 
 @st.cache_data(ttl=3600)
@@ -29,13 +29,11 @@ def carregar_dados_prefeitura_santos():
             tabela = soup.find('table')
             
             if tabela:
-                # Correção aplicada com io.StringIO para ler o HTML corretamente
                 df_list = pd.read_html(io.StringIO(str(tabela)))
                 if len(df_list) > 0:
                     df = df_list[0]
                     df.columns = [c.strip().lower() for c in df.columns]
                     
-                    # Identifica dinamicamente as colunas da tabela oficial
                     col_data = [c for c in df.columns if 'data' in c]
                     col_precip = [c for c in df.columns if 'indíce' in c or 'pluviometrico' in c or 'pluviometria' in c]
                     
@@ -54,7 +52,6 @@ def carregar_dados_prefeitura_santos():
         raise Exception("Estrutura da tabela não processada.")
         
     except Exception as e:
-        # Contingência de segurança operacional
         datas_exemplo = pd.date_range(end=datetime.datetime.now(), periods=10, freq="D")
         valores_exemplo = [12.5, 3.0, 0.0, 45.2, 74.8, 37.4, 15.0, 2.1, 8.4, 19.3]
         df_fallback = pd.DataFrame({
@@ -68,7 +65,7 @@ df_oficial, status_conexao = carregar_dados_prefeitura_santos()
 st.info(f"Status da Telemetria: **{status_conexao}**")
 
 # Exibição dos indicadores
-st.markdown("### 📊 Séries e Acumulados Oficiais")
+st.markdown("### 📊 Indicadores Oficiais Consolidados")
 
 if not df_oficial.empty:
     ac_recente = df_oficial['precip_mm'].iloc[-1]
@@ -80,6 +77,19 @@ if not df_oficial.empty:
     col3.metric("Média Histórica Setembro", "163.7 mm", "Referência Climatológica")
 
 st.markdown("---")
+
+# Seção do Gráfico Operacional Dia a Dia
+st.subheader("📈 Evolução Pluviométrica Diária")
+st.markdown("Gráfico analítico da situação dia a dia registrado pelas estações oficiais:")
+
+if not df_oficial.empty:
+    # Prepara o dataframe para exibição otimizada no gráfico (Data como índice)
+    df_grafico = df_oficial.set_index('data')
+    st.bar_chart(df_grafico['precip_mm'], use_container_width=True)
+else:
+    st.warning("Sem dados disponíveis para exibição gráfica no momento.")
+
+st.markdown("---")
 st.subheader("📋 Registros Brutos Oficiais Auditados")
 st.dataframe(df_oficial, use_container_width=True)
 
@@ -88,4 +98,3 @@ if not df_oficial.empty and ac_recente > 50.0:
     st.error("⚠️ **ATENÇÃO:** O índice da última medição oficial requer atenção operacional imediata nas áreas de encosta.")
 else:
     st.success("✅ **NORMALIDADE:** Índices oficiais dentro da faixa de acompanhamento regular.")
-
