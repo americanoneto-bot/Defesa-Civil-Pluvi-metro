@@ -9,47 +9,62 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Layout Horizontal Oficial. "
-    "Insira os índices nas células de horários de 3 em 3h e acompanhe os acumulados automáticos no rodapé."
+    "**Caderneta Mensal de Observação de Precipitação** — Layout Operacional Padrão."
 )
 
-# Horários de medição de 3 em 3 horas (Linhas da caderneta física na horizontal)
+# 1. Campo para escrever/selecionar o Mês logo acima da tabela
+col_mes1, col_mes2 = st.columns([2, 4])
+with col_mes1:
+    mes_referencia = st.selectbox(
+        "📅 Mês de Referência:",
+        [
+            "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+            "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+        ],
+        index=8 # Setembro como padrão atual
+    )
+with col_mes2:
+    ano_referencia = st.text_input("Ano:", value="2026")
+
+st.markdown(f"### 📋 Posto do Saboó / P6 — Mês: **{mes_referencia} / {ano_referencia}**")
+
+# Horários de medição de 3 em 3 horas (Linha Superior)
 horarios_3h = [
     "06h", "09h", "12h", "15h", 
     "18h", "21h", "00h", "03h (+1)"
 ]
 
-# Dias do mês de 1 a 31 (Colunas da caderneta física)
+# Dias do mês de 1 a 31 (Coluna à Esquerda)
 dias_mes = [str(i).zfill(2) for i in range(1, 32)]
 
-# Inicializando a matriz de dados no session_state se não existir
-if 'caderneta_horizontal' not in st.session_state:
-    # Cria a matriz com dias nas colunas e horários nas linhas
-    df_base = pd.DataFrame(0.0, index=horarios_3h, columns=dias_mes)
-    st.session_state['caderneta_horizontal'] = df_base
+# Inicializando a matriz de dados no session_state se não existir (Dias nas linhas, Horários nas colunas)
+if 'caderneta_invertida' not in st.session_state:
+    df_base = pd.DataFrame(0.0, index=dias_mes, columns=horarios_3h)
+    st.session_state['caderneta_invertida'] = df_base
 
 st.sidebar.header("⚙️ Controles Operacionais")
 st.sidebar.info(
     "**Orientações de Preenchimento:**\n"
-    "• Navegue pela tabela horizontal abaixo.\n"
+    "• À esquerda estão os **Dias do Mês** (01 a 31).\n"
+    "• Na linha superior estão os **Horários (3 em 3h)**.\n"
     "• Insira os milímetros (mm) medidos em cada turno.\n"
-    "• As linhas finais calculam automaticamente os totais e acumulados do PPDC."
+    "• Os acumulados e totais serão calculados automaticamente."
 )
 
-st.subheader("📋 Planilha de Campo: Turnos (Horários) vs. Dias do Mês")
+st.markdown("Insira os índices pluviométricos nas células correspondentes:")
 
-# Tabela interativa principal na horizontal
+# Tabela interativa principal (Dias nas linhas, Horários nas colunas)
 matriz_editada = st.data_editor(
-    st.session_state['caderneta_horizontal'],
+    st.session_state['caderneta_invertida'],
     use_container_width=True,
-    key="editor_caderneta_horizontal"
+    key="editor_caderneta_invertida"
 )
 
-st.session_state['caderneta_horizontal'] = matriz_editada
+st.session_state['caderneta_invertida'] = matriz_editada
 
-# --- CÁLCULOS AUTOMÁTICOS DE RODAPÉ ---
-# 1. Total Diário (Soma das colunas de cada dia)
-total_diario = matriz_editada.sum(axis=0)
+# --- CÁLCULOS AUTOMÁTICOS DE RODAPÉ / LATERAIS ---
+# 1. Total Diário: Soma horizontal de cada linha (dia)
+total_diario = matriz_editada.sum(axis=1)
 
 # 2. Acumulado de 72h (Soma móvel de 3 dias consecutivos)
 acumulado_72h = pd.Series(0.0, index=dias_mes)
@@ -64,19 +79,19 @@ for i in range(len(dias_mes)):
 # 3. Acumulado Mensal Progressivo
 acumulado_mensal = total_diario.cumsum()
 
-# Montando a tabela de rodapé consolidada com os cálculos automáticos
-df_rodape = pd.DataFrame({
+# Montando a tabela de resultados consolidados (Rodapé de Acumulados)
+df_resultados = pd.DataFrame({
     "Total Diário (mm)": total_diario,
     "Acumulado 72h (mm)": acumulado_72h,
     "Acumulado Mensal (mm)": acumulado_mensal
-}).T # Trans põe para manter a mesma harmonia visual horizontal
+})
 
 st.markdown("---")
-st.subheader("📊 Totais e Acumulados Automáticos (Rodapé Operacional)")
-st.markdown("Valores calculados em tempo real de acordo com os lançamentos efetuados:")
+st.subheader("📊 Totais e Acumulados Automáticos (Resultados do Período)")
+st.markdown("Valores calculados em tempo real com base nos lançamentos diários e horários:")
 
 # Exibição da tabela de resultados
-st.dataframe(df_rodape, use_container_width=True)
+st.dataframe(df_resultados, use_container_width=True)
 
 # Checagem do maior acumulado recente de 72h para o gatilho de alerta
 max_72h = acumulado_72h.max()
