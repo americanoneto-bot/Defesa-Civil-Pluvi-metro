@@ -9,7 +9,7 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Isolamento Estrito por Célula."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Vínculo Celular Estrito."
 )
 
 # 1. Seleção do Mês e Ano de Referência
@@ -37,7 +37,7 @@ horarios_3h = [
 # Dias do mês de 01 a 31 (Linhas)
 dias_mes = [str(i).zfill(2) for i in range(1, 32)]
 
-# Inicializando a matriz de entrada manual com strings vazias ("") para garantir células limpas no editor
+# Inicializando a matriz de entrada manual com strings vazias ("")
 if 'caderneta_manual' not in st.session_state:
     df_base = pd.DataFrame("", index=dias_mes, columns=horarios_3h)
     st.session_state['caderneta_manual'] = df_base
@@ -45,11 +45,11 @@ if 'caderneta_manual' not in st.session_state:
 st.sidebar.header("⚙️ Controles Operacionais")
 st.sidebar.info(
     "**Orientações de Preenchimento:**\n"
-    "• Insira os índices de chuva (mm) na tabela superior.\n"
-    "• As tabelas 2 e 3 exibirão dados **somente** nas células equivalentes preenchidas na tabela 1."
+    "• Insira os índices de chuva (mm) na Tabela 1.\n"
+    "• As Tabelas 2 e 3 exibirão os cálculos **exclusivamente** nos horários preenchidos, mantendo o restante limpo e em branco."
 )
 
-st.subheader("📝 1. Lançamento Manual de Índices (mm)")
+st.subheader("📝 1. Tabela de Lançamento Manual (Índices em mm)")
 st.markdown("Digite os valores medidos em cada turno:")
 
 # Tabela interativa para inserção manual
@@ -61,55 +61,52 @@ df_editado = st.data_editor(
 
 st.session_state['caderneta_manual'] = df_editado
 
-# --- LÓGICA DE PROCESSAMENTO MATEMÁTICO ISOLADO ---
-sequencia_indices_matematica = []
-matriz_valores_reais = []
+# --- PROCESSAMENTO MATEMÁTICO COM VÍNCULO CELULAR RESTRITO ---
+sequencia_calculo = []
+lista_status_preenchimento = []
 teve_dado = False
 
-# 1. Varre a tabela 1 recolhendo o que foi digitado de forma estrita
+# 1. Varre a tabela 1 identificando exatamente quais células possuem dados
 for dia in dias_mes:
-    linha_valores = []
     for h in horarios_3h:
         val = df_editado.loc[dia, h]
-        if val is not None and str(val).strip() != "":
+        if val is not None and str(val).strip() != "" and str(val).lower() != "nan":
             try:
                 val_num = float(val)
+                sequencia_calculo.append(val_num)
+                lista_status_preenchimento.append(True)
                 teve_dado = True
             except:
-                val_num = 0.0
+                sequencia_calculo.append(0.0)
+                lista_status_preenchimento.append(False)
         else:
-            val_num = 0.0 # Zero para contas de fundo
-        sequencia_indices_matematica.append(val_num)
-        linha_valores.append(val)
-    matriz_valores_reais.append(linha_valores)
+            sequencia_calculo.append(0.0) # Zero para alimentar a matemática de fundo
+            lista_status_preenchimento.append(False)
 
-serie_para_calculo = pd.Series(sequencia_indices_matematica)
+serie_matematica = pd.Series(sequencia_calculo)
 
-# 2. Executa os cálculos globais de 72h e mensal progressivo
-serie_72h = serie_para_calculo.rolling(window=24, min_periods=1).sum()
-serie_mensal = serie_para_calculo.cumsum()
+# 2. Executa os cálculos contínuos globais
+serie_72h = serie_matematica.rolling(window=24, min_periods=1).sum()
+serie_mensal = serie_matematica.cumsum()
 
-# 3. Constrói as tabelas 2 e 3 preenchendo com "" (vazio) onde a Tabela 1 não tem dado
+# 3. Constrói as tabelas 2 e 3 usando estritamente "" (vazio) para células não preenchidas na Tabela 1
 df_72h = pd.DataFrame("", index=dias_mes, columns=horarios_3h)
 df_mensal = pd.DataFrame("", index=dias_mes, columns=horarios_3h)
 
 idx_global = 0
 max_72h_geral = 0.0
 
-for d_idx, dia in enumerate(dias_mes):
-    for h_idx, h in enumerate(horarios_3h):
-        val_original = df_editado.loc[dia, h]
-        has_data = val_original is not None and str(val_original).strip() != ""
-        
-        if has_data:
-            val_72h = round(serie_72h.iloc[idx_global], 1)
+for dia in dias_mes:
+    for h in horarios_3h:
+        if lista_status_preenchimento[idx_global]:
+            val_72 = round(serie_72h.iloc[idx_global], 1)
             val_mes = round(serie_mensal.iloc[idx_global], 1)
             
-            df_72h.loc[dia, h] = f"{val_72h:.1f}"
+            df_72h.loc[dia, h] = f"{val_72:.1f}"
             df_mensal.loc[dia, h] = f"{val_mes:.1f}"
             
-            if val_72h > max_72h_geral:
-                max_72h_geral = val_72h
+            if val_72 > max_72h_geral:
+                max_72h_geral = val_72
         else:
             df_72h.loc[dia, h] = ""
             df_mensal.loc[dia, h] = ""
