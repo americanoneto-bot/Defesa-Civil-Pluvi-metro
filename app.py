@@ -9,48 +9,49 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "Caderneta de Campo Digital — Insira os índices pluviométricos nas células de horários (3 em 3h) "
-    "e acompanhe o cálculo automático dos acumulados diários, 72h e mensais."
+    "**Caderneta Mensal de Observação de Precipitação** — Layout Horizontal Oficial. "
+    "Insira os índices nas células de horários de 3 em 3h e acompanhe os acumulados automáticos no rodapé."
 )
 
-# Horários oficiais de medição de 3 em 3 horas da Defesa Civil
+# Horários de medição de 3 em 3 horas (Linhas da caderneta física na horizontal)
 horarios_3h = [
-    "06:00", "09:00", "12:00", "15:00", 
-    "18:00", "21:00", "00:00", "03:00 (dia seguinte)"
+    "06h", "09h", "12h", "15h", 
+    "18h", "21h", "00h", "03h (+1)"
 ]
 
-# Inicializando a matriz de dias (colunas 1 a 31) x horários (linhas) no session_state
-dias_mes = [f"Dia {i}" for i in range(1, 32)]
+# Dias do mês de 1 a 31 (Colunas da caderneta física)
+dias_mes = [str(i).zfill(2) for i in range(1, 32)]
 
-if 'matriz_caderneta' not in st.session_state:
-    # Cria uma tabela vazia ou com zeros para simular a grade da folha de campo
-    df_inicial = pd.DataFrame(0.0, index=horarios_3h, columns=dias_mes)
-    st.session_state['matriz_caderneta'] = df_inicial
+# Inicializando a matriz de dados no session_state se não existir
+if 'caderneta_horizontal' not in st.session_state:
+    # Cria a matriz com dias nas colunas e horários nas linhas
+    df_base = pd.DataFrame(0.0, index=horarios_3h, columns=dias_mes)
+    st.session_state['caderneta_horizontal'] = df_base
 
-st.sidebar.header("⚙️ Parâmetros Operacionais")
+st.sidebar.header("⚙️ Controles Operacionais")
 st.sidebar.info(
-    "**Instruções de Preenchimento:**\n"
-    "• Insira os valores de chuva (mm) nos horários correspondentes de 3 em 3 horas.\n"
-    "• Os totais diários, acumulados de 72h e mensais serão calculados automaticamente no rodapé."
+    "**Orientações de Preenchimento:**\n"
+    "• Navegue pela tabela horizontal abaixo.\n"
+    "• Insira os milímetros (mm) medidos em cada turno.\n"
+    "• As linhas finais calculam automaticamente os totais e acumulados do PPDC."
 )
 
-st.subheader("📝 Grade de Lançamento por Horário (Entradas de 3 em 3h)")
-st.markdown("Edite os campos da matriz abaixo conforme os boletins de campo:")
+st.subheader("📋 Planilha de Campo: Turnos (Horários) vs. Dias do Mês")
 
-# Tabela interativa onde o operador insere os dados nos horários
+# Tabela interativa principal na horizontal
 matriz_editada = st.data_editor(
-    st.session_state['matriz_caderneta'],
+    st.session_state['caderneta_horizontal'],
     use_container_width=True,
-    key="editor_matriz_horarios"
+    key="editor_caderneta_horizontal"
 )
 
-st.session_state['matriz_caderneta'] = matriz_editada
+st.session_state['caderneta_horizontal'] = matriz_editada
 
-# --- CÁLCULOS AUTOMÁTICOS DE RODAPÉ (Lógica da Defesa Civil) ---
-# 1. Total Diário: soma de todas as leituras de 3h de cada dia (coluna)
+# --- CÁLCULOS AUTOMÁTICOS DE RODAPÉ ---
+# 1. Total Diário (Soma das colunas de cada dia)
 total_diario = matriz_editada.sum(axis=0)
 
-# 2. Acumulado de 72h (3 dias móveis): soma do dia atual + os 2 dias anteriores
+# 2. Acumulado de 72h (Soma móvel de 3 dias consecutivos)
 acumulado_72h = pd.Series(0.0, index=dias_mes)
 for i in range(len(dias_mes)):
     if i == 0:
@@ -63,41 +64,39 @@ for i in range(len(dias_mes)):
 # 3. Acumulado Mensal Progressivo
 acumulado_mensal = total_diario.cumsum()
 
-# Montando a tabela de resultados automáticos (Linhas Azuis de Rodapé)
-df_resultados = pd.DataFrame({
+# Montando a tabela de rodapé consolidada com os cálculos automáticos
+df_rodape = pd.DataFrame({
     "Total Diário (mm)": total_diario,
     "Acumulado 72h (mm)": acumulado_72h,
     "Acumulado Mensal (mm)": acumulado_mensal
-}).T # Trans põe para ficar com os dias nas colunas, igual à caderneta física
+}).T # Trans põe para manter a mesma harmonia visual horizontal
 
 st.markdown("---")
-st.subheader("🔵 Resultados Automáticos (Linhas de Rodapé / Acumulados)")
-st.markdown("Valores calculados em tempo real com base nas inserções horárias:")
+st.subheader("📊 Totais e Acumulados Automáticos (Rodapé Operacional)")
+st.markdown("Valores calculados em tempo real de acordo com os lançamentos efetuados:")
 
-# Exibe a tabela de resultados com destaque visual
-st.dataframe(df_resultados, use_container_width=True)
+# Exibição da tabela de resultados
+st.dataframe(df_rodape, use_container_width=True)
 
-# Identificando o último dia preenchido ou o dia atual para checagem de alerta
-# Pegamos o dia com maior índice recente ou a última coluna com dados
-ultimos_valores_72h = acumulado_72h[total_diario > 0]
-max_72h_atual = ultimos_valores_72h.iloc[-1] if not ultimos_valores_72h.empty else acumulado_72h.iloc[0]
+# Checagem do maior acumulado recente de 72h para o gatilho de alerta
+max_72h = acumulado_72h.max()
 
 st.markdown("---")
 st.subheader("🚨 Status Operacional Crítico (Morro do Saboó)")
 
-if max_72h_atual >= 80.0:
+if max_72h >= 80.0:
     st.error(
-        f"⚠️ **ALERTA MÁXIMO / ATENÇÃO:** O acumulado móvel de 72 horas atingiu "
-        f"**{max_72h_atual:.1f} mm** (ultrapassando o patamar de segurança de 80 mm do PPDC). "
+        f"⚠️ **ALERTA / ESTADO DE ATENÇÃO MÁXIMA:** O acumulado móvel de 72 horas atingiu "
+        f"**{max_72h:.1f} mm** (ultrapassando o patamar normativo de 80 mm do PPDC). "
         "Ações de campo e vistorias preventivas obrigatórias!"
     )
-elif max_72h_atual >= 50.0:
+elif max_72h >= 50.0:
     st.warning(
-        f"⚠️ **ESTADO DE ATENÇÃO:** Acumulado de 72h em **{max_72h_atual:.1f} mm**. "
-        "Monitoramento intensificado nas encostas do Saboó."
+        f"⚠️ **ESTADO DE ATENÇÃO:** Acumulado de 72h em **{max_72h:.1f} mm**. "
+        "Monitoramento intensificado nas encostas."
     )
 else:
     st.success(
-        f"✅ **ESTADO DE OBSERVAÇÃO:** Acumulado recente de 72h em **{max_72h_atual:.1f} mm**. "
-        "Dentro da normalidade operacional."
+        f"✅ **ESTADO DE OBSERVAÇÃO:** Maior acumulado recente de 72h em **{max_72h:.1f} mm**. "
+        "Índices dentro da normalidade operacional."
     )
