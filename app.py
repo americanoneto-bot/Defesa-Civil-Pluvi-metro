@@ -3,97 +3,101 @@ import pandas as pd
 import streamlit as st
 
 st.set_page_config(
-    page_title="Defesa Civil Santos - Caderneta de Campo Saboó",
+    page_title="Defesa Civil Santos - Caderneta Oficial Saboó (P6)",
     layout="wide",
 )
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "Módulo de Caderneta de Campo Digital: Insira os índices pluviométricos manualmente "
-    "e acompanhe os cálculos automáticos de acumulados (24h, 72h e Mensal) conforme as diretrizes do PPDC."
+    "Caderneta de Campo Digital — Insira os índices pluviométricos nas células de horários (3 em 3h) "
+    "e acompanhe o cálculo automático dos acumulados diários, 72h e mensais."
 )
 
-# Inicializando uma base padrão de dados para preenchimento manual (simulando a caderneta)
-if 'df_caderneta' not in st.session_state:
-    datas_padrao = pd.date_range(end=datetime.date.today(), periods=10, freq="D")
-    st.session_state['df_caderneta'] = pd.DataFrame({
-        "Data": datas_padrao,
-        "Precipitação_Diária_mm": [0.0, 13.8, 0.5, 74.8, 37.4, 15.0, 2.1, 8.4, 19.3, 12.5]
-    })
+# Horários oficiais de medição de 3 em 3 horas da Defesa Civil
+horarios_3h = [
+    "06:00", "09:00", "12:00", "15:00", 
+    "18:00", "21:00", "00:00", "03:00 (dia seguinte)"
+]
 
-st.sidebar.header("⚙️ Painel de Controle Operacional")
+# Inicializando a matriz de dias (colunas 1 a 31) x horários (linhas) no session_state
+dias_mes = [f"Dia {i}" for i in range(1, 32)]
+
+if 'matriz_caderneta' not in st.session_state:
+    # Cria uma tabela vazia ou com zeros para simular a grade da folha de campo
+    df_inicial = pd.DataFrame(0.0, index=horarios_3h, columns=dias_mes)
+    st.session_state['matriz_caderneta'] = df_inicial
+
+st.sidebar.header("⚙️ Parâmetros Operacionais")
 st.sidebar.info(
-    "Instruções:\n"
-    "1. Edite diretamente os valores na tabela abaixo (coluna de Precipitação).\n"
-    "2. O sistema recalculará automaticamente as janelas de 24h, 72h e o Acumulado Mensal."
+    "**Instruções de Preenchimento:**\n"
+    "• Insira os valores de chuva (mm) nos horários correspondentes de 3 em 3 horas.\n"
+    "• Os totais diários, acumulados de 72h e mensais serão calculados automaticamente no rodapé."
 )
 
-# Tabela interativa para inserção manual (Data Editor)
-st.subheader("📝 Caderneta de Lançamento Manual (Entrada de Dados às 06h)")
-df_editado = st.data_editor(
-    st.session_state['df_caderneta'],
-    num_rows="dynamic",
+st.subheader("📝 Grade de Lançamento por Horário (Entradas de 3 em 3h)")
+st.markdown("Edite os campos da matriz abaixo conforme os boletins de campo:")
+
+# Tabela interativa onde o operador insere os dados nos horários
+matriz_editada = st.data_editor(
+    st.session_state['matriz_caderneta'],
     use_container_width=True,
-    key="editor_dados"
+    key="editor_matriz_horarios"
 )
 
-# Salvando as edições no estado da sessão
-st.session_state['df_caderneta'] = df_editado
+st.session_state['matriz_caderneta'] = matriz_editada
 
-# Processamento matemático automático dos acumulados exigidos pela Defesa Civil
-if not df_editado.empty:
-    df_processado = df_editado.copy()
-    df_processado['Data'] = pd.to_datetime(df_processado['Data'])
-    df_processado = df_processado.sort_values('Data').reset_index(drop=True)
-    
-    # Garantindo valores numéricos
-    df_processado['Precipitação_Diária_mm'] = pd.to_numeric(df_processado['Precipitação_Diária_mm'], errors='coerce').fillna(0.0)
-    
-    # Cálculo automático do Acumulado de 72 horas (soma móvel das últimas 3 entradas/dias)
-    df_processado['Acumulado_72h_mm'] = df_processado['Precipitação_Diária_mm'].rolling(window=3, min_periods=1).sum()
-    
-    # Cálculo automático do Acumulado Mensal progressivo
-    df_processado['Acumulado_Mensal_mm'] = df_processado['Precipitação_Diária_mm'].cumsum()
-    
-    # Pegando os valores mais recentes para os Indicadores Oficiais
-    ultimo_registro = df_processado.iloc[-1]
-    ac_24h = ultimo_registro['Precipitação_Diária_mm']
-    ac_72h = ultimo_registro['Acumulado_72h_mm']
-    ac_mes = ultimo_registro['Acumulado_Mensal_mm']
+# --- CÁLCULOS AUTOMÁTICOS DE RODAPÉ (Lógica da Defesa Civil) ---
+# 1. Total Diário: soma de todas as leituras de 3h de cada dia (coluna)
+total_diario = matriz_editada.sum(axis=0)
 
-    st.markdown("---")
-    st.subheader("📊 Indicadores Oficiais Calculados Automaticamente")
-    
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Acumulado Diário (24h)", f"{ac_24h:.1f} mm", "Medição Base")
-    col2.metric("Acumulado 72 Horas", f"{ac_72h:.1f} mm", "Gatilho PPDC (Lim. 80mm)")
-    col3.metric("Acumulado Mensal", f"{ac_mes:.1f} mm", "Saturação Periódica")
-
-    # Avaliação de Risco Normativa da Defesa Civil baseada no acumulado de 72h
-    st.subheader("🚨 Status Operacional do Morro do Saboó")
-    if ac_72h >= 80.0:
-        st.error(
-            f"⚠️ **ALERTA / ESTADO DE ATENÇÃO:** O acumulado móvel de 72h atingiu **{ac_72h:.1f} mm** "
-            f"(ultrapassando o patamar normativo de 80 mm exigido pelo PPDC). Intensificar vistorias de campo!"
-        )
-    elif ac_72h >= 50.0:
-        st.warning(
-            f"⚠️ **ESTADO DE ATENÇÃO:** Acumulado de 72h em **{ac_72h:.1f} mm**. "
-            "Monitoramento preventivo ativo nas encostas do Saboó."
-        )
+# 2. Acumulado de 72h (3 dias móveis): soma do dia atual + os 2 dias anteriores
+acumulado_72h = pd.Series(0.0, index=dias_mes)
+for i in range(len(dias_mes)):
+    if i == 0:
+        acumulado_72h.iloc[i] = total_diario.iloc[i]
+    elif i == 1:
+        acumulado_72h.iloc[i] = total_diario.iloc[i-1] + total_diario.iloc[i]
     else:
-        st.success(
-            f"✅ **ESTADO DE OBSERVAÇÃO:** Acumulado de 72h em **{ac_72h:.1f} mm**. "
-            "Índices dentro da faixa de normalidade operacional."
-        )
+        acumulado_72h.iloc[i] = total_diario.iloc[i-2] + total_diario.iloc[i-1] + total_diario.iloc[i]
 
-    st.markdown("---")
-    st.subheader("📈 Gráfico Comparativo da Evolução Diária e de 72h")
-    
-    # Exibição gráfica otimizada
-    df_grafico = df_processado.set_index('Data')[['Precipitação_Diária_mm', 'Acumulado_72h_mm']]
-    st.bar_chart(df_grafico, use_container_width=True)
+# 3. Acumulado Mensal Progressivo
+acumulado_mensal = total_diario.cumsum()
 
-    st.markdown("---")
-    st.subheader("📋 Trilha de Auditoria e Relatório Consolidado")
-    st.dataframe(df_processado, use_container_width=True)
+# Montando a tabela de resultados automáticos (Linhas Azuis de Rodapé)
+df_resultados = pd.DataFrame({
+    "Total Diário (mm)": total_diario,
+    "Acumulado 72h (mm)": acumulado_72h,
+    "Acumulado Mensal (mm)": acumulado_mensal
+}).T # Trans põe para ficar com os dias nas colunas, igual à caderneta física
+
+st.markdown("---")
+st.subheader("🔵 Resultados Automáticos (Linhas de Rodapé / Acumulados)")
+st.markdown("Valores calculados em tempo real com base nas inserções horárias:")
+
+# Exibe a tabela de resultados com destaque visual
+st.dataframe(df_resultados, use_container_width=True)
+
+# Identificando o último dia preenchido ou o dia atual para checagem de alerta
+# Pegamos o dia com maior índice recente ou a última coluna com dados
+ultimos_valores_72h = acumulado_72h[total_diario > 0]
+max_72h_atual = ultimos_valores_72h.iloc[-1] if not ultimos_valores_72h.empty else acumulado_72h.iloc[0]
+
+st.markdown("---")
+st.subheader("🚨 Status Operacional Crítico (Morro do Saboó)")
+
+if max_72h_atual >= 80.0:
+    st.error(
+        f"⚠️ **ALERTA MÁXIMO / ATENÇÃO:** O acumulado móvel de 72 horas atingiu "
+        f"**{max_72h_atual:.1f} mm** (ultrapassando o patamar de segurança de 80 mm do PPDC). "
+        "Ações de campo e vistorias preventivas obrigatórias!"
+    )
+elif max_72h_atual >= 50.0:
+    st.warning(
+        f"⚠️ **ESTADO DE ATENÇÃO:** Acumulado de 72h em **{max_72h_atual:.1f} mm**. "
+        "Monitoramento intensificado nas encostas do Saboó."
+    )
+else:
+    st.success(
+        f"✅ **ESTADO DE OBSERVAÇÃO:** Acumulado recente de 72h em **{max_72h_atual:.1f} mm**. "
+        "Dentro da normalidade operacional."
+    )
