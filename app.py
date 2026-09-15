@@ -9,7 +9,7 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Acumulado Mensal Inicializado em Zero."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Restrição de Exibição Condicional."
 )
 
 # 1. Seleção do Mês e Ano de Referência
@@ -45,9 +45,8 @@ if 'caderneta_manual' not in st.session_state:
 st.sidebar.header("⚙️ Controles Operacionais")
 st.sidebar.info(
     "**Orientações de Preenchimento:**\n"
-    "• Insira os índices de chuva (mm) apenas nos horários apurados na tabela superior.\n"
-    "• As tabelas inferiores calculam os acumulados automaticamente.\n"
-    "• Células futuras ou sem lançamentos iniciam zeradas na tabela de acumulado mensal."
+    "• Insira os índices de chuva (mm) na tabela superior.\n"
+    "• As tabelas 2 e 3 exibirão os cálculos apenas nos horários devidamente preenchidos, permanecendo zeradas nos demais."
 )
 
 st.subheader("📝 1. Lançamento Manual de Índices (mm)")
@@ -62,7 +61,7 @@ df_editado = st.data_editor(
 
 st.session_state['caderneta_manual'] = df_editado
 
-# --- PROCESSAMENTO MATEMÁTICO ---
+# --- PROCESSAMENTO MATEMÁTICO COM RESTRIÇÃO CONDICIONAL ---
 sequencia_indices = []
 mapeamento_celulas = []
 teve_dado = False
@@ -77,7 +76,7 @@ for dia in dias_mes:
             except:
                 val_num = 0.0
         else:
-            val_num = 0.0 # Tratado como zero para alimentar as somas matemáticas
+            val_num = 0.0 # Tratado como zero para as somas matemáticas de fundo
             
         sequencia_indices.append(val_num)
         mapeamento_celulas.append((dia, h))
@@ -90,16 +89,14 @@ serie_72h = serie_para_calculo.rolling(window=24, min_periods=1).sum()
 # 2. Acumulado Mensal Progressivo contínuo
 serie_mensal = serie_para_calculo.cumsum()
 
-# Construindo as tabelas analíticas automáticas
+# Construindo as tabelas analíticas automáticas estritamente condicionadas aos preenchimentos da Tabela 1
 df_72h = pd.DataFrame(0.0, index=dias_mes, columns=horarios_3h)
 df_mensal = pd.DataFrame(0.0, index=dias_mes, columns=horarios_3h)
 
-# Para rastrear se o dia/horário já possui dado inserido na tabela superior
 for idx, (dia, h) in enumerate(mapeamento_celulas):
     val_original = df_editado.loc[dia, h]
     has_data = val_original is not None and str(val_original).strip() != ""
     
-    # Se houver dado na superior, exibe o cálculo na tabela de 72h e mensal. Caso contrário, mantém zerado/em branco.
     if has_data:
         df_72h.loc[dia, h] = round(serie_72h.iloc[idx], 1)
         df_mensal.loc[dia, h] = round(serie_mensal.iloc[idx], 1)
@@ -109,12 +106,12 @@ for idx, (dia, h) in enumerate(mapeamento_celulas):
 
 st.markdown("---")
 st.subheader("📊 2. Acumulado de 72h por Turno (Cálculo Automático)")
-st.markdown("Janela móvel de 72 horas:")
+st.markdown("Exibido restritamente nos horários preenchidos na tabela de índices:")
 st.dataframe(df_72h, use_container_width=True)
 
 st.markdown("---")
 st.subheader("📈 3. Acumulado Mensal Progressivo por Horário (Cálculo Automático)")
-st.markdown("Evolução contínua acumulada (iniciada em zero para os turnos futuros):")
+st.markdown("Evolução contínua acumulada exibida apenas para os turnos informados:")
 st.dataframe(df_mensal, use_container_width=True)
 
 # Identificando o maior acumulado de 72h para o gatilho de alerta do PPDC
