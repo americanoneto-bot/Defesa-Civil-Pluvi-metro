@@ -9,7 +9,7 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Restrição Estrita por Célula."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Restrição Estrita de Exibição."
 )
 
 # 1. Seleção do Mês e Ano de Referência
@@ -46,7 +46,7 @@ st.sidebar.header("⚙️ Controles Operacionais")
 st.sidebar.info(
     "**Orientações de Preenchimento:**\n"
     "• Insira os índices de chuva (mm) na tabela superior.\n"
-    "• As tabelas 2 e 3 processarão e exibirão os valores estritamente nos mesmos horários preenchidos."
+    "• As tabelas 2 e 3 exibirão os valores calculados **apenas** nos horários onde houver dados preenchidos na tabela 1. Demais campos ficam em branco."
 )
 
 st.subheader("📝 1. Lançamento Manual de Índices (mm)")
@@ -66,7 +66,7 @@ sequencia_indices = []
 mapeamento_celulas = []
 teve_dado = False
 
-# 1. Varre a tabela 1 recolhendo os valores (tratando vazios como 0 para a matemática, mas registrando a presença de dados)
+# 1. Varre a tabela 1 recolhendo os valores (tratando vazios como 0 para a matemática de fundo)
 for dia in dias_mes:
     for h in horarios_3h:
         val = df_editado.loc[dia, h]
@@ -88,9 +88,9 @@ serie_para_calculo = pd.Series(sequencia_indices)
 serie_72h = serie_para_calculo.rolling(window=24, min_periods=1).sum()
 serie_mensal = serie_para_calculo.cumsum()
 
-# 3. Constrói as tabelas 2 e 3 garantindo que o valor só aparece se a célula correspondente na tabela 1 foi preenchida
-df_72h = pd.DataFrame(0.0, index=dias_mes, columns=horarios_3h)
-df_mensal = pd.DataFrame(0.0, index=dias_mes, columns=horarios_3h)
+# 3. Constrói as tabelas 2 e 3 inicializadas com None (em branco), preenchendo APENAS onde a Tabela 1 tem dados
+df_72h = pd.DataFrame(None, index=dias_mes, columns=horarios_3h)
+df_mensal = pd.DataFrame(None, index=dias_mes, columns=horarios_3h)
 
 for idx, (dia, h) in enumerate(mapeamento_celulas):
     val_original = df_editado.loc[dia, h]
@@ -100,17 +100,17 @@ for idx, (dia, h) in enumerate(mapeamento_celulas):
         df_72h.loc[dia, h] = round(serie_72h.iloc[idx], 1)
         df_mensal.loc[dia, h] = round(serie_mensal.iloc[idx], 1)
     else:
-        df_72h.loc[dia, h] = 0.0
-        df_mensal.loc[dia, h] = 0.0
+        df_72h.loc[dia, h] = None
+        df_mensal.loc[dia, h] = None
 
 st.markdown("---")
 st.subheader("📊 2. Acumulado de 72h por Turno (Cálculo Automático)")
-st.markdown("Exibido estritamente nos horários informados na tabela de índices:")
+st.markdown("Exibido estritamente e unicamente nos horários preenchidos na tabela de índices:")
 st.dataframe(df_72h, use_container_width=True)
 
 st.markdown("---")
 st.subheader("📈 3. Acumulado Mensal Progressivo por Horário (Cálculo Automático)")
-st.markdown("Evolução contínua exibida estritamente nos turnos preenchidos:")
+st.markdown("Evolução contínua exibida estritamente e unicamente nos turnos preenchidos:")
 st.dataframe(df_mensal, use_container_width=True)
 
 # Identificando o maior acumulado de 72h para o gatilho de alerta do PPDC
