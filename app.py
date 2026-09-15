@@ -9,10 +9,11 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Layout Operacional de Linha Dupla por Dia."
+    "**Caderneta Mensal de Observação de Precipitação** — Matriz Unificada de Linha Dupla "
+    "(Lançamento Manual de Índices e Cálculo Automático de 72h por Turno na mesma tabela)."
 )
 
-# 1. Campo para escrever/selecionar o Mês e Ano
+# 1. Seleção do Mês e Ano de Referência
 col_mes1, col_mes2 = st.columns([2, 4])
 with col_mes1:
     mes_referencia = st.selectbox(
@@ -28,84 +29,79 @@ with col_mes2:
 
 st.markdown(f"### 📋 Posto do Saboó / P6 — Mês: **{mes_referencia} / {ano_referencia}**")
 
-# Horários de medição de 3 em 3 horas (Linha Superior da Tabela)
+# Horários de medição de 3 em 3 horas (Linha Superior)
 horarios_3h = [
     "06h", "09h", "12h", "15h", 
     "18h", "21h", "00h", "03h (+1)"
 ]
 
-# Construindo o índice duplo para cada dia (Dia X - Entrada e Dia X - Acum. 72h)
+# Dias do mês de 01 a 31
 dias_mes = [str(i).zfill(2) for i in range(1, 32)]
-indices_linhas = []
-for dia in dias_mes:
-    indices_linhas.append(f"{dia} - Índice (mm)")
-    indices_linhas.append(f"{dia} - Acum. 72h")
 
-# Inicializando a matriz no session_state se não existir
-if 'caderneta_linha_dupla' not in st.session_state:
-    df_base = pd.DataFrame(0.0, index=indices_linhas, columns=horarios_3h)
-    st.session_state['caderneta_linha_dupla'] = df_base
+# Construindo as tuplas para o Multi-Index (Dia + Tipo de Linha)
+tuplas_linhas = []
+for dia in dias_mes:
+    tuplas_linhas.append((dia, "Índice (mm)"))
+    tuplas_linhas.append((dia, "Acum. 72h"))
+
+multi_index = pd.MultiIndex.from_tuples(tuplas_linhas, names=["Dia", "Tipo"])
+
+# Inicializando a matriz unificada no session_state
+if 'caderneta_unificada' not in st.session_state:
+    df_base = pd.DataFrame(0.0, index=multi_index, columns=horarios_3h)
+    st.session_state['caderneta_unificada'] = df_base
 
 st.sidebar.header("⚙️ Controles Operacionais")
 st.sidebar.info(
     "**Orientações de Preenchimento:**\n"
-    "• Linhas **'Índice (mm)'**: Insira manualmente os valores de chuva de cada turno.\n"
-    "• Linhas **'Acum. 72h'**: Calculadas automaticamente pelo sistema em tempo real.\n"
-    "• Colunas superiores: Horários de medição (3 em 3h)."
+    "• Digite os valores nas linhas de **Índice (mm)**.\n"
+    "• As linhas de **Acum. 72h** calculam automaticamente o somatório das últimas 72 horas (24 turnos) para cada horário exato.\n"
+    "• Tudo na mesma tabela."
 )
 
-st.markdown("Insira os índices pluviométricos nas linhas de **Índice (mm)** correspondentes a cada dia:")
+st.subheader("📝 Caderneta de Campo Integrada (Entrada e Acumulados por Turno)")
 
-# Tabela interativa principal
-matriz_editada = st.data_editor(
-    st.session_state['caderneta_linha_dupla'],
+# Tabela interativa unificada
+df_editado = st.data_editor(
+    st.session_state['caderneta_unificada'],
     use_container_width=True,
-    key="editor_caderneta_dupla"
+    key="editor_caderneta_unificada"
 )
 
-# --- CÁLCULO AUTOMÁTICO DO ACUMULADO DE 72H POR HORÁRIO ---
-# Para cada horário, somamos as últimas 24 entradas de turnos (equivalente a 3 dias x 8 turnos/dia = 24 turnos)
-df_processado = matriz_editada.copy()
-
-# Achata todas as células de índices em uma série cronológica contínua para calcular a janela móvel de 72h (24 turnos)
-lista_indices_por_turno = []
-mapeamento_posicoes = []
+# --- PROCESSAMENTO MATEMÁTICO AUTOMÁTICO NA MESMA TABELA ---
+# 1. Extraímos sequencialmente todos os índices digitados nas linhas de "Índice (mm)"
+sequencia_indices = []
+mapeamento_celulas = []
 
 for dia in dias_mes:
-    linha_idx = f"{dia} - Índice (mm)"
-    linha_72h = f"{dia} - Acum. 72h"
     for h in horarios_3h:
-        val = df_processado.loc[linha_idx, h]
+        val = df_editado.loc[(dia, "Índice (mm)"), h]
         try:
             val_num = float(val)
         except:
             val_num = 0.0
-        lista_indices_por_turno.append(val_num)
-        mapeamento_posicoes.append((linha_72h, h))
+        sequencia_indices.append(val_num)
+        mapeamento_celulas.append((dia, h))
 
-serie_temporal = pd.Series(lista_indices_por_turno)
-# Janela móvel de 24 turnos (72 horas)
+# 2. Calculamos a janela móvel de 72h (24 turnos consecutivos de 3 em 3h)
+serie_temporal = pd.Series(sequencia_indices)
 serie_72h = serie_temporal.rolling(window=24, min_periods=1).sum()
 
-# Reatribuindo os valores calculados de volta às linhas de Acum. 72h
-for idx, (linha_72h, h) in enumerate(mapeamento_posicoes):
-    df_processado.loc[linha_72h, h] = round(serie_72h.iloc[idx], 1)
+# 3. Atualizamos a tabela de trabalho preenchendo as linhas de Acum. 72h automaticamente
+df_atualizado = df_editado.copy()
+for idx, (dia, h) in enumerate(mapeamento_celulas):
+    df_atualizado.loc[(dia, "Acum. 72h"), h] = round(serie_72h.iloc[idx], 1)
 
-# Atualiza a sessão com os cálculos automáticos aplicados nas linhas de 72h
-st.session_state['caderneta_linha_dupla'] = df_processado
+# Salvamos de volta no session_state para manter a sincronia visual
+st.session_state['caderneta_unificada'] = df_atualizado
 
-st.markdown("---")
-st.subheader("📋 Matriz Oficial Consolidada (Entradas e Acumulados Automáticos)")
-st.dataframe(df_processado, use_container_width=True)
-
-# Identificando o maior valor de 72h gerado na tabela para fins de alerta do PPDC
-todos_valores_72h = []
+# Identificando o maior acumulado de 72h em toda a tabela para o gatilho de alerta do PPDC
+max_72h_geral = 0.0
 for dia in dias_mes:
-    linha_72h = f"{dia} - Acum. 72h"
     for h in horarios_3h:
-        todos_valores_72h.append(df_processado.loc[linha_72h, h])
-
-max_72h_geral = max(todos_valores_72h) if todos_valores_72h else 0.0
+        val_72h = df_atualizado.loc[(dia, "Acum. 72h"), h]
+        if val_72h > max_72h_geral:
+            max_72h_geral = val_72h
 
 st.markdown("---")
 st.subheader("🚨 Status Operacional Crítico (Morro do Saboó)")
