@@ -9,7 +9,7 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Alerta Crítico e Protocolo de Baixa de Índice."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Alerta Amarelo e Persistência de Dados."
 )
 
 # 1. Seleção do Mês e Ano de Referência
@@ -37,10 +37,9 @@ horarios_3h = [
 # Dias do mês de 01 a 31 (Linhas)
 dias_mes = [str(i).zfill(2) for i in range(1, 32)]
 
-# Inicializando a matriz de entrada manual com strings vazias ("")
+# Inicializando a matriz de entrada manual com persistência garantida via session_state
 if 'caderneta_manual' not in st.session_state:
-    df_base = pd.DataFrame("", index=dias_mes, columns=horarios_3h)
-    st.session_state['caderneta_manual'] = df_base
+    st.session_state['caderneta_manual'] = pd.DataFrame("", index=dias_mes, columns=horarios_3h)
 
 # Inicializando estados de controle do alerta de 80mm
 if 'atingiu_80mm' not in st.session_state:
@@ -52,14 +51,14 @@ st.sidebar.header("⚙️ Controles Operacionais")
 st.sidebar.info(
     "**Orientações de Preenchimento:**\n"
     "• Insira os índices de chuva (mm) na Tabela 1.\n"
-    "• As Tabelas 2 e 3 exibirão os cálculos exclusivamente nos horários preenchidos.\n"
-    "• O painel emitirá alertas visuais destacados ao atingir o patamar de 80 mm em 72h."
+    "• Os dados inseridos ficam salvos automaticamente na memória da sessão.\n"
+    "• O painel emitirá o alerta de atenção em amarelo ao atingir 80 mm em 72h."
 )
 
 st.subheader("📝 1. Tabela de Lançamento Manual (Índices em mm)")
 st.markdown("Digite os valores medidos em cada turno:")
 
-# Tabela interativa para inserção manual
+# Tabela interativa para inserção manual vinculada diretamente ao session_state para resistir a F5
 df_editado = st.data_editor(
     st.session_state['caderneta_manual'],
     use_container_width=True,
@@ -73,7 +72,6 @@ sequencia_calculo = []
 lista_status_preenchimento = []
 teve_dado = False
 
-# 1. Varre a tabela 1 identificando exatamente quais células possuem dados
 for dia in dias_mes:
     for h in horarios_3h:
         val = df_editado.loc[dia, h]
@@ -92,11 +90,10 @@ for dia in dias_mes:
 
 serie_matematica = pd.Series(sequencia_calculo)
 
-# 2. Executa os cálculos contínuos globais
+# Executa os cálculos contínuos globais
 serie_72h = serie_matematica.rolling(window=24, min_periods=1).sum()
 serie_mensal = serie_matematica.cumsum()
 
-# 3. Constrói as tabelas 2 e 3 usando estritamente "" (vazio) para células não preenchidas na Tabela 1
 df_72h = pd.DataFrame("", index=dias_mes, columns=horarios_3h)
 df_mensal = pd.DataFrame("", index=dias_mes, columns=horarios_3h)
 
@@ -131,16 +128,16 @@ st.dataframe(df_mensal, use_container_width=True)
 st.markdown("---")
 st.subheader("🚨 Status Operacional Crítico (Morro do Saboó)")
 
-# --- LÓGICA DO AVISO DE ATENÇÃO DESTAQUE E PROTOCOLO DE QUEDA ---
+# --- LÓGICA DO AVISO DE ATENÇÃO EM AMARELO E PROTOCOLO DE QUEDA ---
 if max_72h_geral >= 80.0:
     st.session_state['atingiu_80mm'] = True
-    # Aviso em letras grandes e destacadas em lugar visível
+    # Quadro inteiro em cor AMARELO com texto destacado e mensagem solicitada
     st.markdown(
         """
-        <div style="background-color: #ff4b4b; padding: 25px; border-radius: 10px; text-align: center; color: white;">
+        <div style="background-color: #ffeb3b; padding: 25px; border-radius: 10px; text-align: center; color: #333333; border: 2px solid #fbc02d;">
             <h1 style="margin: 0; font-size: 42px; font-weight: bold;">⚠️ ATENÇÃO ⚠️</h1>
-            <h3 style="margin: 10px 0 0 0; font-size: 22px;">O acumulado de 72h atingiu o patamar crítico de <b>80.0 mm</b> ou mais!</h3>
-            <p style="margin: 5px 0 0 0; font-size: 16px;">Ações de campo, vistorias e protocolo de alerta máximo ativados no Posto P6.</p>
+            <h3 style="margin: 10px 0 0 0; font-size: 22px;">O acumulado de 72h atingiu o patamar de <b>80.0 mm</b>!</h3>
+            <p style="margin: 8px 0 0 0; font-size: 17px; font-weight: 500;">Estado de Atenção : Vistoria de campo para avalição de riscos.</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -149,9 +146,10 @@ elif st.session_state['atingiu_80mm'] and max_72h_geral < 80.0 and teve_dado:
     # O índice baixou para menos de 80mm após ter atingido anteriormente
     st.markdown(
         """
-        <div style="background-color: #ffa500; padding: 20px; border-radius: 10px; text-align: center; color: black;">
-            <h2 style="margin: 0; font-size: 30px; font-weight: bold;">⚠️ ATENÇÃO: QUEDA NO ACUMULADO</h2>
+        <div style="background-color: #fff9c4; padding: 20px; border-radius: 10px; text-align: center; color: #333333; border: 1px solid #fbc02d;">
+            <h2 style="margin: 0; font-size: 28px; font-weight: bold;">⚠️ ATENÇÃO: QUEDA NO ACUMULADO</h2>
             <p style="margin: 5px 0 0 0; font-size: 16px;">O índice de 72h baixou para <b>{:.1f} mm</b> (abaixo de 80 mm).</p>
+            <p style="margin: 5px 0 0 0; font-size: 15px;">Estado de Atenção : Vistoria de campo para avalição de riscos.</p>
         </div>
         """.format(max_72h_geral),
         unsafe_allow_html=True
@@ -169,11 +167,10 @@ elif st.session_state['atingiu_80mm'] and max_72h_geral < 80.0 and teve_dado:
         st.warning("🔒 **Nível de Atenção MANTIDO** por diretriz operacional do plantão, mesmo com a redução momentânea do índice.")
     else:
         st.session_state['decisao_manual_atencao'] = "Cancelar"
-        st.session_state['atingiu_80mm'] = False  # Reseta o gatilho se o operador optar por cancelar
+        st.session_state['atingiu_80mm'] = False  
         st.success("✅ **Nível de Atenção CANCELADO** conforme decisão do operador em plantão. Retorno à observação normal.")
 
 else:
-    # Estado normal de observação
     if max_72h_geral >= 50.0:
         st.warning(
             f"⚠️ **ESTADO DE ATENÇÃO:** Acumulado de 72h em **{max_72h_geral:.1f} mm**. "
