@@ -9,7 +9,7 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Alerta Infalível de Queda de Nível."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Controle de Alerta Estável."
 )
 
 # 1. Seleção do Mês e Ano de Referência
@@ -48,8 +48,6 @@ else:
 
 if 'atingiu_80mm' not in st.session_state:
     st.session_state['atingiu_80mm'] = False
-if 'decisao_manual_atencao' not in st.session_state:
-    st.session_state['decisao_manual_atencao'] = "Manter"
 
 st.sidebar.header("⚙️ Controles Operacionais")
 st.sidebar.info(
@@ -141,7 +139,7 @@ st.dataframe(df_mensal, use_container_width=True)
 st.markdown("---")
 st.subheader("🚨 Status Operacional Crítico (Morro do Saboó)")
 
-# --- LÓGICA CORRIGIDA: GATILHO DIRETO DE QUEDA DE NÍVEL ---
+# --- LÓGICA DE ALERTA E QUEDA ESTÁVEL ---
 if max_72h_geral >= 80.0:
     st.session_state['atingiu_80mm'] = True
     st.markdown(
@@ -155,7 +153,6 @@ if max_72h_geral >= 80.0:
         unsafe_allow_html=True
     )
 elif st.session_state['atingiu_80mm'] and max_72h_geral < 80.0:
-    # Gatilho ativado imediatamente sempre que já esteve em 80mm e agora baixou
     st.markdown(
         """
         <div style="background-color: #fff9c4; padding: 20px; border-radius: 10px; text-align: center; color: #333333; border: 1px solid #fbc02d;">
@@ -171,19 +168,15 @@ elif st.session_state['atingiu_80mm'] and max_72h_geral < 80.0:
     escolha = st.radio(
         "O acumulado reduziu abaixo do patamar crítico. Deseja retornar ao Estado de Observação ou manter o Nível de Atenção?",
         ["Retornar ao Estado de Observação", "Manter Nível de Atenção"],
-        index=0 if st.session_state['decisao_manual_atencao'] == "Cancelar" else 1,
         key="radio_decisao_atencao"
     )
     
     if escolha == "Manter Nível de Atenção":
-        st.session_state['decisao_manual_atencao'] = "Manter"
         st.warning("🔒 **Nível de Atenção MANTIDO** por diretriz operacional do plantão, mesmo com a redução momentânea do índice.")
     else:
-        st.session_state['decisao_manual_atencao'] = "Cancelar"
         st.session_state['atingiu_80mm'] = False  
         st.success("✅ **Retornado ao Estado de Observação** conforme decisão do operador em plantão.")
 else:
-    # Condição padrão de normalidade (abaixo de 80mm e sem alerta prévio ativo)
     st.success(
         f"✅ **ESTADO DE OBSERVAÇÃO:** Maior acumulado de 72h recente em **{max_72h_geral:.1f} mm** (menor que 80 mm). "
         "Índices dentro da normalidade operacional para o Posto P6."
