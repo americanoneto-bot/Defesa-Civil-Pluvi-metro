@@ -9,7 +9,7 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Gestão Inteligente de Status."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Trava de Histórico de Alerta."
 )
 
 # 1. Seleção do Mês e Ano de Referência
@@ -38,7 +38,7 @@ horarios_3h = [
 dias_mes = [f"{i:02d}" for i in range(1, 32)]
 colunas_tabela_1 = horarios_3h + ["Total Diário"]
 
-# --- BLINDAGEM ABSOLUTA DE PERSISTÊNCIA E STATUS ---
+# --- BLINDAGEM ABSOLUTA DE PERSISTÊNCIA E ESTADO ---
 if 'caderneta_manual' not in st.session_state:
     st.session_state['caderneta_manual'] = pd.DataFrame("", index=dias_mes, columns=colunas_tabela_1)
 else:
@@ -46,8 +46,9 @@ else:
         if col not in st.session_state['caderneta_manual'].columns:
             st.session_state['caderneta_manual'][col] = ""
 
-if 'status_operacional' not in st.session_state:
-    st.session_state['status_operacional'] = "Observação"
+# Trava de histórico para garantir que o alerta de queda apareça
+if 'historico_atingiu_80' not in st.session_state:
+    st.session_state['historico_atingiu_80'] = False
 
 st.sidebar.header("⚙️ Controles Operacionais")
 st.sidebar.info(
@@ -67,7 +68,7 @@ df_editado = st.data_editor(
     key="editor_caderneta_estavel"
 )
 
-# --- PROCESSAMENTO MATEMÁTICO DE PRECISO ---
+# --- PROCESSAMENTO MATEMÁTICO DE PRECISÃO ---
 sequencia_calculo = []
 lista_status_preenchimento = []
 matriz_valores_numericos = pd.DataFrame(0.0, index=dias_mes, columns=horarios_3h)
@@ -128,9 +129,9 @@ for dia in dias_mes:
             
         idx_global += 1
 
-# Atualiza automaticamente o status para Atenção caso atinja ou ultrapasse 80mm
+# Se em algum momento o acumulado atingiu 80mm, aciona a trava de histórico
 if max_72h_geral >= 80.0:
-    st.session_state['status_operacional'] = "Atenção"
+    st.session_state['historico_atingiu_80'] = True
 
 st.markdown("---")
 st.subheader("📊 2. Acumulado de 72h por Turno (Cálculo Automático)")
@@ -143,46 +144,46 @@ st.dataframe(df_mensal, use_container_width=True)
 st.markdown("---")
 st.subheader("🚨 Status Operacional Crítico (Morro do Saboó)")
 
-# --- MÁQUINA DE ESTADOS OPERACIONAL ---
-if st.session_state['status_operacional'] == "Atenção":
-    if max_72h_geral >= 80.0:
-        st.markdown(
-            """
-            <div style="background-color: #ffeb3b; padding: 25px; border-radius: 10px; text-align: center; color: #333333; border: 2px solid #fbc02d;">
-                <h1 style="margin: 0; font-size: 42px; font-weight: bold;">⚠️ ATENÇÃO ⚠️</h1>
-                <h3 style="margin: 10px 0 0 0; font-size: 22px;">O acumulado de 72h atingiu o patamar de <b>80.0 mm</b>!</h3>
-                <p style="margin: 8px 0 0 0; font-size: 17px; font-weight: 500;">Estado de Atenção : Vistoria de campo para avaliação de riscos.</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+# --- GESTÃO DE EXIBIÇÃO COM TRAVA DE HISTÓRICO ---
+if max_72h_geral >= 80.0:
+    st.markdown(
+        """
+        <div style="background-color: #ffeb3b; padding: 25px; border-radius: 10px; text-align: center; color: #333333; border: 2px solid #fbc02d;">
+            <h1 style="margin: 0; font-size: 42px; font-weight: bold;">⚠️ ATENÇÃO ⚠️</h1>
+            <h3 style="margin: 10px 0 0 0; font-size: 22px;">O acumulado de 72h atingiu o patamar de <b>80.0 mm</b>!</h3>
+            <p style="margin: 8px 0 0 0; font-size: 17px; font-weight: 500;">Estado de Atenção : Vistoria de campo para avaliação de riscos.</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+elif st.session_state['historico_atingiu_80'] and max_72h_geral < 80.0:
+    # A trava está ativa e o índice atual baixou de 80mm: OBRIGA a exibição da mensagem de queda
+    st.markdown(
+        """
+        <div style="background-color: #fff9c4; padding: 20px; border-radius: 10px; text-align: center; color: #333333; border: 1px solid #fbc02d;">
+            <h2 style="margin: 0; font-size: 28px; font-weight: bold;">⚠️ ATENÇÃO: QUEDA NO ACUMULADO</h2>
+            <p style="margin: 5px 0 0 0; font-size: 16px;">O índice de 72h baixou para <b>{:.1f} mm</b> (abaixo de 80 mm).</p>
+            <p style="margin: 5px 0 0 0; font-size: 15px;">Estado de Atenção : Vistoria de campo para avaliação de riscos.</p>
+        </div>
+        """.format(max_72h_geral),
+        unsafe_allow_html=True
+    )
+    
+    st.markdown("### 🎛️ Decisão de Protocolo Operacional:")
+    escolha = st.radio(
+        "O acumulado reduziu abaixo do patamar crítico. Deseja retornar ao Estado de Observação ou manter o Nível de Atenção?",
+        ["Retornar ao Estado de Observação", "Manter Nível de Atenjon"],
+        key="radio_decisao_atencao"
+    )
+    
+    if escolha == "Manter Nível de Atenjon":
+        st.warning("🔒 **Nível de Atenção MANTIDO** por diretriz operacional do plantão, mesmo com a redução momentânea do índice.")
     else:
-        # O status está em atenção, mas o índice atual caiu para abaixo de 80mm
-        st.markdown(
-            """
-            <div style="background-color: #fff9c4; padding: 20px; border-radius: 10px; text-align: center; color: #333333; border: 1px solid #fbc02d;">
-                <h2 style="margin: 0; font-size: 28px; font-weight: bold;">⚠️ ATENÇÃO: QUEDA NO ACUMULADO</h2>
-                <p style="margin: 5px 0 0 0; font-size: 16px;">O índice de 72h baixou para <b>{:.1f} mm</b> (abaixo de 80 mm).</p>
-                <p style="margin: 5px 0 0 0; font-size: 15px;">Estado de Atenção : Vistoria de campo para avaliação de riscos.</p>
-            </div>
-            """.format(max_72h_geral),
-            unsafe_allow_html=True
-        )
-        
-        st.markdown("### 🎛️ Decisão de Protocolo Operacional:")
-        escolha = st.radio(
-            "O acumulado reduziu abaixo do patamar crítico. Deseja retornar ao Estado de Observação ou manter o Nível de Atenção?",
-            ["Retornar ao Estado de Observação", "Manter Nível de Atenção"],
-            key="radio_decisao_atencao"
-        )
-        
-        if escolha == "Manter Nível de Atenção":
-            st.warning("🔒 **Nível de Atenção MANTIDO** por diretriz operacional do plantão, mesmo com a redução momentânea do índice.")
-        else:
-            st.session_state['status_operacional'] = "Observação"
-            st.success("✅ **Retornado ao Estado de Observação** conforme decisão do operador em plantão.")
+        # Reseta a trava permitindo voltar ao normal
+        st.session_state['historico_atingiu_80'] = False  
+        st.success("✅ **Retornado ao Estado de Observação** conforme decisão do operador em plantão.")
 else:
-    # Estado de Observação padrão
+    # Condição padrão de normalidade (nunca atingiu 80mm ou o operador já resetou o alerta)
     if max_72h_geral >= 50.0:
         st.warning(
             f"⚠️ **ESTADO DE ATENÇÃO (Parcial):** Acumulado de 72h em **{max_72h_geral:.1f} mm**. "
