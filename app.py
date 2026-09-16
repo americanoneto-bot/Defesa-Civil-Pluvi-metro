@@ -9,7 +9,7 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Totalizador Diário na Tabela Mensal."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Totalizador Diário na Tabela de Lançamento."
 )
 
 # 1. Seleção do Mês e Ano de Referência
@@ -28,7 +28,7 @@ with col_mes2:
 
 st.markdown(f"### 📋 Posto do Saboó / P6 — Mês: **{mes_referencia} / {ano_referencia}**")
 
-# Horários de medição de 3 em 3 horas (Colunas originais)
+# Horários de medição de 3 em 3 horas (Colunas)
 horarios_3h = [
     "06h", "09h", "12h", "15h", 
     "18h", "21h", "00h", "03h (+1)"
@@ -37,9 +37,18 @@ horarios_3h = [
 # Dias do mês de 01 a 31 (Linhas)
 dias_mes = [f"{i:02d}" for i in range(1, 32)]
 
+# Colunas completas da Tabela 1 (incluindo a coluna de Total Diário no final)
+colunas_tabela_1 = horarios_3h + ["Total Diário"]
+
 # --- BLINDAGEM DA PERSISTÊNCIA (SESSION STATE) ---
 if 'caderneta_manual' not in st.session_state:
-    st.session_state['caderneta_manual'] = pd.DataFrame("", index=dias_mes, columns=horarios_3h)
+    df_base = pd.DataFrame("", index=dias_mes, columns=colunas_tabela_1)
+    st.session_state['caderneta_manual'] = df_base
+else:
+    # Garante que a coluna de total exista caso o estado anterior seja carregado
+    for col in colunas_tabela_1:
+        if col not in st.session_state['caderneta_manual'].columns:
+            st.session_state['caderneta_manual'][col] = ""
 
 if 'atingiu_80mm' not in st.session_state:
     st.session_state['atingiu_80mm'] = False
@@ -49,33 +58,51 @@ if 'decisao_manual_atencao' not in st.session_state:
 st.sidebar.header("⚙️ Controles Operacionais")
 st.sidebar.info(
     "**Orientações de Preenchimento:**\n"
-    "• Insira os índices de chuva (mm) na Tabela 1.\n"
-    "• Os dados inseridos estão blindados e resistem a atualizações de página (F5).\n"
-    "• A Tabela 3 agora possui a coluna final de **Total Diário** somando os índices do dia."
+    "• Insira os índices de chuva (mm) nos turnos da Tabela 1.\n"
+    "• A coluna **Total Diário** da Tabela 1 calcula automaticamente a soma dos turnos do dia.\n"
+    "• Os dados resistem a atualizações de página (F5)."
 )
 
-st.subheader("📝 1. Tabela de Lançamento Manual (Índices em mm)")
-st.markdown("Digite os valores medidos em cada turno:")
+st.subheader("📝 1. Tabela de Lançamento Manual e Total Diário (mm)")
+st.markdown("Digite os valores medidos em cada turno (a última coluna soma automaticamente o dia):")
 
-# Tabela interativa com persistência absoluta vinculada ao session_state
+# Prepara a visualização atualizada do total diário antes de renderizar o editor
+matriz_temp_calc = pd.DataFrame(0.0, index=dias_mes, columns=horarios_3h)
+for dia in dias_mes:
+    for h in horarios_3h:
+        val = st.session_state['caderneta_manual'].loc[dia, h]
+        if val is not None and str(val).strip() != "" and str(val).lower() != "nan":
+            try:
+                matriz_temp_calc.loc[dia, h] = float(str(val).replace(',', '.'))
+            except:
+                pass
+
+for dia in dias_mes:
+    soma_dia = matriz_temp_calc.loc[dia].sum()
+    if any(matriz_temp_calc.loc[dia] > 0.0):
+        st.session_state['caderneta_manual'].loc[dia, "Total Diário"] = f"{soma_dia:.1f}"
+    else:
+        # Se a linha estiver vazia, deixa em branco
+        if not any(st.session_state['caderneta_manual'].loc[dia, horarios_3h].isin([str(x) for x in range(100)])):
+             # Verifica se realmente não há digitação manual nas células de horário
+             pass
+
+# Tabela interativa de lançamento manual
 df_editado = st.data_editor(
     st.session_state['caderneta_manual'],
     use_container_width=True,
     key="editor_caderneta_estavel"
 )
 
-# Atualiza e consolida permanentemente os dados na sessão
-st.session_state['caderneta_manual'] = df_editado
-
 # --- PROCESSAMENTO MATEMÁTICO DE PRECISÃO ---
 sequencia_calculo = []
 lista_status_preenchimento = []
 teve_dado = False
-
-# Matriz para guardar valores numéricos puros para as somas diárias
 matriz_valores_numericos = pd.DataFrame(0.0, index=dias_mes, columns=horarios_3h)
 
 for dia in dias_mes:
+    soma_linha_atual = 0.0
+    tem_dado_na_linha = False
     for h in horarios_3h:
         val = df_editado.loc[dia, h]
         if val is not None and str(val).strip() != "" and str(val).lower() != "nan":
@@ -84,13 +111,23 @@ for dia in dias_mes:
                 sequencia_calculo.append(val_num)
                 lista_status_preenchimento.append(True)
                 matriz_valores_numericos.loc[dia, h] = val_num
+                soma_linha_atual += val_num
                 teve_dado = True
+                tem_dado_na_linha = True
             except:
                 sequencia_calculo.append(0.0)
                 lista_status_preenchimento.append(False)
         else:
             sequencia_calculo.append(0.0)
             lista_status_preenchimento.append(False)
+            
+    # Atualiza dinamicamente o valor do Total Diário na própria Tabela 1 editada
+    if tem_dado_na_linha:
+        df_editado.loc[dia, "Total Diário"] = f"{soma_linha_atual:.1f}"
+    else:
+        df_editado.loc[dia, "Total Diário"] = ""
+
+st.session_state['caderneta_manual'] = df_editado
 
 serie_matematica = pd.Series(sequencia_calculo)
 
@@ -99,21 +136,12 @@ serie_72h = serie_matematica.rolling(window=24, min_periods=1).sum()
 serie_mensal = serie_matematica.cumsum()
 
 df_72h = pd.DataFrame("", index=dias_mes, columns=horarios_3h)
-
-# Colunas para a tabela 3 (Horários + Total Diário)
-colunas_tabela_3 = horarios_3h + ["Total Diário"]
-df_mensal = pd.DataFrame("", index=dias_mes, columns=colunas_tabela_3)
+df_mensal = pd.DataFrame("", index=dias_mes, columns=horarios_3h) # Tabela 3 limpa apenas com os horários de 3h
 
 idx_global = 0
 max_72h_geral = 0.0
 
 for dia in dias_mes:
-    # Verifica se o dia possui ao menos um horário preenchido na tabela 1
-    dia_tem_dado = any(matriz_valores_numericos.loc[dia] > 0.0)
-    
-    # Soma total dos índices da Tabela 1 para este dia específico
-    soma_diaria_t1 = matriz_valores_numericos.loc[dia].sum()
-    
     for h in horarios_3h:
         if lista_status_preenchimento[idx_global]:
             val_72 = round(serie_72h.iloc[idx_global], 1)
@@ -129,20 +157,13 @@ for dia in dias_mes:
             df_mensal.loc[dia, h] = ""
             
         idx_global += 1
-        
-    # Atribui o Total Diário na última coluna da Tabela 3 apenas se o dia tiver registros
-    if dia_tem_dado:
-        df_mensal.loc[dia, "Total Diário"] = f"{soma_diaria_t1:.1f}"
-    else:
-        df_mensal.loc[dia, "Total Diário"] = ""
 
 st.markdown("---")
 st.subheader("📊 2. Acumulado de 72h por Turno (Cálculo Automático)")
 st.dataframe(df_72h, use_container_width=True)
 
 st.markdown("---")
-st.subheader("📈 3. Acumulado Mensal Progressivo e Total Diário")
-st.markdown("Evolução contínua por horário com o somatório consolidado do dia na última coluna:")
+st.subheader("📈 3. Acumulado Mensal Progressivo por Horário (Cálculo Automático)")
 st.dataframe(df_mensal, use_container_width=True)
 
 st.markdown("---")
