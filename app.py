@@ -9,7 +9,7 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Estado de Observação Dinâmico."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Alerta Infalível de Queda de Nível."
 )
 
 # 1. Seleção do Mês e Ano de Referência
@@ -72,7 +72,6 @@ df_editado = st.data_editor(
 # --- PROCESSAMENTO MATEMÁTICO DE PRECISÃO ---
 sequencia_calculo = []
 lista_status_preenchimento = []
-teve_dado = False
 matriz_valores_numericos = pd.DataFrame(0.0, index=dias_mes, columns=horarios_3h)
 
 for dia in dias_mes:
@@ -87,7 +86,6 @@ for dia in dias_mes:
                 lista_status_preenchimento.append(True)
                 matriz_valores_numericos.loc[dia, h] = val_num
                 soma_linha_atual += val_num
-                teve_dado = True
                 tem_dado_na_linha = True
             except:
                 sequencia_calculo.append(0.0)
@@ -143,7 +141,7 @@ st.dataframe(df_mensal, use_container_width=True)
 st.markdown("---")
 st.subheader("🚨 Status Operacional Crítico (Morro do Saboó)")
 
-# --- LÓGICA DE EXIBIÇÃO: ATENÇÃO (EM AMARELO) VS OBSERVAÇÃO ---
+# --- LÓGICA CORRIGIDA: GATILHO DIRETO DE QUEDA DE NÍVEL ---
 if max_72h_geral >= 80.0:
     st.session_state['atingiu_80mm'] = True
     st.markdown(
@@ -151,18 +149,19 @@ if max_72h_geral >= 80.0:
         <div style="background-color: #ffeb3b; padding: 25px; border-radius: 10px; text-align: center; color: #333333; border: 2px solid #fbc02d;">
             <h1 style="margin: 0; font-size: 42px; font-weight: bold;">⚠️ ATENÇÃO ⚠️</h1>
             <h3 style="margin: 10px 0 0 0; font-size: 22px;">O acumulado de 72h atingiu o patamar de <b>80.0 mm</b>!</h3>
-            <p style="margin: 8px 0 0 0; font-size: 17px; font-weight: 500;">Estado de Atenção : Vistoria de campo para avalição de riscos.</p>
+            <p style="margin: 8px 0 0 0; font-size: 17px; font-weight: 500;">Estado de Atenção : Vistoria de campo para avaliação de riscos.</p>
         </div>
         """,
         unsafe_allow_html=True
     )
-elif st.session_state['atingiu_80mm'] and max_72h_geral < 80.0 and teve_dado:
+elif st.session_state['atingiu_80mm'] and max_72h_geral < 80.0:
+    # Gatilho ativado imediatamente sempre que já esteve em 80mm e agora baixou
     st.markdown(
         """
         <div style="background-color: #fff9c4; padding: 20px; border-radius: 10px; text-align: center; color: #333333; border: 1px solid #fbc02d;">
             <h2 style="margin: 0; font-size: 28px; font-weight: bold;">⚠️ ATENÇÃO: QUEDA NO ACUMULADO</h2>
             <p style="margin: 5px 0 0 0; font-size: 16px;">O índice de 72h baixou para <b>{:.1f} mm</b> (abaixo de 80 mm).</p>
-            <p style="margin: 5px 0 0 0; font-size: 15px;">Estado de Atenção : Vistoria de campo para avalição de riscos.</p>
+            <p style="margin: 5px 0 0 0; font-size: 15px;">Estado de Atenção : Vistoria de campo para avaliação de riscos.</p>
         </div>
         """.format(max_72h_geral),
         unsafe_allow_html=True
@@ -170,9 +169,9 @@ elif st.session_state['atingiu_80mm'] and max_72h_geral < 80.0 and teve_dado:
     
     st.markdown("### 🎛️ Decisão de Protocolo Operacional:")
     escolha = st.radio(
-        "O acumulado reduziu abaixo do patamar crítico. Deseja cancelar ou manter o nível de atenção atual?",
-        ["Manter Nível de Atenção", "Cancelar Nível de Atenção"],
-        index=0 if st.session_state['decisao_manual_atencao'] == "Manter" else 1,
+        "O acumulado reduziu abaixo do patamar crítico. Deseja retornar ao Estado de Observação ou manter o Nível de Atenção?",
+        ["Retornar ao Estado de Observação", "Manter Nível de Atenção"],
+        index=0 if st.session_state['decisao_manual_atencao'] == "Cancelar" else 1,
         key="radio_decisao_atencao"
     )
     
@@ -182,10 +181,9 @@ elif st.session_state['atingiu_80mm'] and max_72h_geral < 80.0 and teve_dado:
     else:
         st.session_state['decisao_manual_atencao'] = "Cancelar"
         st.session_state['atingiu_80mm'] = False  
-        st.success("✅ **Nível de Atenção CANCELADO** conforme decisão do operador em plantão. Retorno à observação normal.")
-
+        st.success("✅ **Retornado ao Estado de Observação** conforme decisão do operador em plantão.")
 else:
-    # Abaixo de 80mm exibe o Estado de Observação padrão
+    # Condição padrão de normalidade (abaixo de 80mm e sem alerta prévio ativo)
     st.success(
         f"✅ **ESTADO DE OBSERVAÇÃO:** Maior acumulado de 72h recente em **{max_72h_geral:.1f} mm** (menor que 80 mm). "
         "Índices dentro da normalidade operacional para o Posto P6."
