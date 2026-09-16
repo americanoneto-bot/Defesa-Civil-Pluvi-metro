@@ -15,7 +15,7 @@ except:
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Transição Automática de Status."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Gestão Bilateral de Alertas."
 )
 
 # Horários de medição de 3 em 3 horas (Colunas)
@@ -136,11 +136,11 @@ for dia in dias_mes:
         idx_global += 1
 
 # --- MECANISMO DE TRANSIÇÃO AUTOMÁTICA DE ESTADO ---
-# Se está em Observação e o índice atinge >= 80, aciona a pendência de subida
+# Só dispara pendência de subida se o status atual for Observacao e o acumulado atingir >= 80
 if st.session_state['status_operacional'] == "Observacao" and max_72h_geral >= 80.0:
     st.session_state['status_operacional'] = "Subida_Pendente"
 
-# Se está em Atenção e o índice cai para < 80, aciona a pendência de queda
+# Só dispara pendência de queda se o status atual for Atencao e o acumulado cair para < 80
 elif st.session_state['status_operacional'] == "Atencao" and max_72h_geral < 80.0:
     st.session_state['status_operacional'] = "Queda_Pendente"
 
@@ -178,10 +178,10 @@ if st.session_state['status_operacional'] == "Subida_Pendente":
     if st.button("Confirmar e Atualizar Status", key="btn_subida"):
         if escolha_subida == "Declarar Estado de Atenção":
             st.session_state['status_operacional'] = "Atencao"
-            st.success("🚨 **Estado de Atenção DECLARADO** automaticamente.")
+            st.success("🚨 **Estado de Atenção DECLARADO** com sucesso.")
         else:
             st.session_state['status_operacional'] = "Observacao"
-            st.warning("⚠️ **Estado de Observação MANTIDO** automaticamente.")
+            st.warning("⚠️ **Estado de Observação MANTIDO** com sucesso.")
         st.rerun()
 
 elif st.session_state['status_operacional'] == "Atencao":
@@ -224,13 +224,8 @@ elif st.session_state['status_operacional'] == "Queda_Pendente":
         st.rerun()
 
 else:
-    if max_72h_geral >= 50.0:
-        st.warning(
-            f"⚠️ **ESTADO DE ATENÇÃO (Parcial):** Acumulado de 72h em **{max_72h_geral:.1f} mm**. "
-            "Monitoramento intensificado nas encostas."
-        )
-    else:
-        st.success(
-            f"✅ **ESTADO DE OBSERVAÇÃO:** Maior acumulado de 72h recente em **{max_72h_geral:.1f} mm** (menor que 80 mm). "
-            "Índices dentro da normalidade operacional para o Posto P6."
-        )
+    # Estado Operacional Oficial: Observação / Normalidade
+    st.success(
+        f"✅ **ESTADO DE OBSERVAÇÃO:** Maior acumulado de 72h recente em **{max_72h_geral:.1f} mm**. "
+        "Índices dentro da normalidade operacional para o Posto P6."
+    )
