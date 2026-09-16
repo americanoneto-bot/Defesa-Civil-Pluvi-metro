@@ -9,7 +9,7 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Alerta Amarelo e Persistência de Dados."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional Estável com Persistência Robusta."
 )
 
 # 1. Seleção do Mês e Ano de Referência
@@ -34,14 +34,13 @@ horarios_3h = [
     "18h", "21h", "00h", "03h (+1)"
 ]
 
-# Dias do mês de 01 a 31 (Linhas)
-dias_mes = [str(i).zfill(2) for i in range(1, 32)]
+# Dias do mês de 01 a 31 (Linhas) - Garantindo formato string de 2 dígitos
+dias_mes = [f"{i:02d}" for i in range(1, 32)]
 
-# Inicializando a matriz de entrada manual com persistência garantida via session_state
+# Inicialização estrita do session_state para resistir a atualizações de página (F5)
 if 'caderneta_manual' not in st.session_state:
     st.session_state['caderneta_manual'] = pd.DataFrame("", index=dias_mes, columns=horarios_3h)
 
-# Inicializando estados de controle do alerta de 80mm
 if 'atingiu_80mm' not in st.session_state:
     st.session_state['atingiu_80mm'] = False
 if 'decisao_manual_atencao' not in st.session_state:
@@ -51,33 +50,35 @@ st.sidebar.header("⚙️ Controles Operacionais")
 st.sidebar.info(
     "**Orientações de Preenchimento:**\n"
     "• Insira os índices de chuva (mm) na Tabela 1.\n"
-    "• Os dados inseridos ficam salvos automaticamente na memória da sessão.\n"
+    "• Os dados inseridos ficam salvos na sessão e resistem a atualizações (F5).\n"
     "• O painel emitirá o alerta de atenção em amarelo ao atingir 80 mm em 72h."
 )
 
 st.subheader("📝 1. Tabela de Lançamento Manual (Índices em mm)")
 st.markdown("Digite os valores medidos em cada turno:")
 
-# Tabela interativa para inserção manual vinculada diretamente ao session_state para resistir a F5
+# Componente de edição blindado garantindo leitura do session_state atualizado
 df_editado = st.data_editor(
     st.session_state['caderneta_manual'],
     use_container_width=True,
     key="editor_caderneta_estavel"
 )
 
+# Atualiza imediatamente o session_state com o que o operador digitou
 st.session_state['caderneta_manual'] = df_editado
 
-# --- PROCESSAMENTO MATEMÁTICO COM VÍNCULO CELULAR RESTRITO ---
+# --- PROCESSAMENTO MATEMÁTICO BLINDADO (Incluindo o dia 04 e demais) ---
 sequencia_calculo = []
 lista_status_preenchimento = []
 teve_dado = False
 
 for dia in dias_mes:
     for h in horarios_3h:
+        # Garante a captura correta do valor mesmo após o F5
         val = df_editado.loc[dia, h]
         if val is not None and str(val).strip() != "" and str(val).lower() != "nan":
             try:
-                val_num = float(val)
+                val_num = float(str(val).replace(',', '.'))
                 sequencia_calculo.append(val_num)
                 lista_status_preenchimento.append(True)
                 teve_dado = True
@@ -90,7 +91,7 @@ for dia in dias_mes:
 
 serie_matematica = pd.Series(sequencia_calculo)
 
-# Executa os cálculos contínuos globais
+# Executa os cálculos contínuos globais (janela de 72h = 24 turnos)
 serie_72h = serie_matematica.rolling(window=24, min_periods=1).sum()
 serie_mensal = serie_matematica.cumsum()
 
@@ -131,7 +132,6 @@ st.subheader("🚨 Status Operacional Crítico (Morro do Saboó)")
 # --- LÓGICA DO AVISO DE ATENÇÃO EM AMARELO E PROTOCOLO DE QUEDA ---
 if max_72h_geral >= 80.0:
     st.session_state['atingiu_80mm'] = True
-    # Quadro inteiro em cor AMARELO com texto destacado e mensagem solicitada
     st.markdown(
         """
         <div style="background-color: #ffeb3b; padding: 25px; border-radius: 10px; text-align: center; color: #333333; border: 2px solid #fbc02d;">
@@ -143,7 +143,6 @@ if max_72h_geral >= 80.0:
         unsafe_allow_html=True
     )
 elif st.session_state['atingiu_80mm'] and max_72h_geral < 80.0 and teve_dado:
-    # O índice baixou para menos de 80mm após ter atingido anteriormente
     st.markdown(
         """
         <div style="background-color: #fff9c4; padding: 20px; border-radius: 10px; text-align: center; color: #333333; border: 1px solid #fbc02d;">
@@ -159,7 +158,8 @@ elif st.session_state['atingiu_80mm'] and max_72h_geral < 80.0 and teve_dado:
     escolha = st.radio(
         "O acumulado reduziu abaixo do patamar crítico. Deseja cancelar ou manter o nível de atenção atual?",
         ["Manter Nível de Atenção", "Cancelar Nível de Atenção"],
-        index=0 if st.session_state['decisao_manual_atencao'] == "Manter" else 1
+        index=0 if st.session_state['decisao_manual_atencao'] == "Manter" else 1,
+        key="radio_decisao_atencao"
     )
     
     if escolha == "Manter Nível de Atenção":
