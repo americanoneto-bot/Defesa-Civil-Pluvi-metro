@@ -9,7 +9,7 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Blindagem Total de Persistência de Dados."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Totalizador Diário na Tabela Mensal."
 )
 
 # 1. Seleção do Mês e Ano de Referência
@@ -28,7 +28,7 @@ with col_mes2:
 
 st.markdown(f"### 📋 Posto do Saboó / P6 — Mês: **{mes_referencia} / {ano_referencia}**")
 
-# Horários de medição de 3 em 3 horas (Colunas)
+# Horários de medição de 3 em 3 horas (Colunas originais)
 horarios_3h = [
     "06h", "09h", "12h", "15h", 
     "18h", "21h", "00h", "03h (+1)"
@@ -51,7 +51,7 @@ st.sidebar.info(
     "**Orientações de Preenchimento:**\n"
     "• Insira os índices de chuva (mm) na Tabela 1.\n"
     "• Os dados inseridos estão blindados e resistem a atualizações de página (F5).\n"
-    "• O painel emitirá o alerta de atenção em amarelo ao atingir 80 mm em 72h."
+    "• A Tabela 3 agora possui a coluna final de **Total Diário** somando os índices do dia."
 )
 
 st.subheader("📝 1. Tabela de Lançamento Manual (Índices em mm)")
@@ -67,20 +67,23 @@ df_editado = st.data_editor(
 # Atualiza e consolida permanentemente os dados na sessão
 st.session_state['caderneta_manual'] = df_editado
 
-# --- PROCESSAMENTO MATEMÁTICO DE PRECISÃO (Incluindo dia 04 e demais) ---
+# --- PROCESSAMENTO MATEMÁTICO DE PRECISÃO ---
 sequencia_calculo = []
 lista_status_preenchimento = []
 teve_dado = False
+
+# Matriz para guardar valores numéricos puros para as somas diárias
+matriz_valores_numericos = pd.DataFrame(0.0, index=dias_mes, columns=horarios_3h)
 
 for dia in dias_mes:
     for h in horarios_3h:
         val = df_editado.loc[dia, h]
         if val is not None and str(val).strip() != "" and str(val).lower() != "nan":
             try:
-                # Converte substituta de vírgula para ponto caso o operador digite com vírgula
                 val_num = float(str(val).replace(',', '.'))
                 sequencia_calculo.append(val_num)
                 lista_status_preenchimento.append(True)
+                matriz_valores_numericos.loc[dia, h] = val_num
                 teve_dado = True
             except:
                 sequencia_calculo.append(0.0)
@@ -96,12 +99,21 @@ serie_72h = serie_matematica.rolling(window=24, min_periods=1).sum()
 serie_mensal = serie_matematica.cumsum()
 
 df_72h = pd.DataFrame("", index=dias_mes, columns=horarios_3h)
-df_mensal = pd.DataFrame("", index=dias_mes, columns=horarios_3h)
+
+# Colunas para a tabela 3 (Horários + Total Diário)
+colunas_tabela_3 = horarios_3h + ["Total Diário"]
+df_mensal = pd.DataFrame("", index=dias_mes, columns=colunas_tabela_3)
 
 idx_global = 0
 max_72h_geral = 0.0
 
 for dia in dias_mes:
+    # Verifica se o dia possui ao menos um horário preenchido na tabela 1
+    dia_tem_dado = any(matriz_valores_numericos.loc[dia] > 0.0)
+    
+    # Soma total dos índices da Tabela 1 para este dia específico
+    soma_diaria_t1 = matriz_valores_numericos.loc[dia].sum()
+    
     for h in horarios_3h:
         if lista_status_preenchimento[idx_global]:
             val_72 = round(serie_72h.iloc[idx_global], 1)
@@ -117,13 +129,20 @@ for dia in dias_mes:
             df_mensal.loc[dia, h] = ""
             
         idx_global += 1
+        
+    # Atribui o Total Diário na última coluna da Tabela 3 apenas se o dia tiver registros
+    if dia_tem_dado:
+        df_mensal.loc[dia, "Total Diário"] = f"{soma_diaria_t1:.1f}"
+    else:
+        df_mensal.loc[dia, "Total Diário"] = ""
 
 st.markdown("---")
 st.subheader("📊 2. Acumulado de 72h por Turno (Cálculo Automático)")
 st.dataframe(df_72h, use_container_width=True)
 
 st.markdown("---")
-st.subheader("📈 3. Acumulado Mensal Progressivo por Horário (Cálculo Automático)")
+st.subheader("📈 3. Acumulado Mensal Progressivo e Total Diário")
+st.markdown("Evolução contínua por horário com o somatório consolidado do dia na última coluna:")
 st.dataframe(df_mensal, use_container_width=True)
 
 st.markdown("---")
