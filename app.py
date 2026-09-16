@@ -135,12 +135,12 @@ for dia in dias_mes:
             
         idx_global += 1
 
-# --- MECANISMO BILATERAL DE TRANSIÇÃO DE ESTADO ---
-# 1. Se estava em Observação e o acumulado atinge >= 80mm -> Ativa Subida Pendente
+# --- MECANISMO DE TRANSIÇÃO ESTÁVEL (COM TRAVA DE ESTADO) ---
+# Só dispara pendência de subida se estivermos estritamente em Observação e o índice atingir >= 80
 if st.session_state['status_operacional'] == "Observacao" and max_72h_geral >= 80.0:
     st.session_state['status_operacional'] = "Subida_Pendente"
 
-# 2. Se estava em Atenção e o acumulado cai para < 80mm -> Ativa Queda Pendente
+# Só dispara pendência de queda se estivermos estritamente em Atencao e o índice cair para < 80
 elif st.session_state['status_operacional'] == "Atencao" and max_72h_geral < 80.0:
     st.session_state['status_operacional'] = "Queda_Pendente"
 
@@ -175,13 +175,13 @@ if st.session_state['status_operacional'] == "Subida_Pendente":
         key="radio_decisao_subida"
     )
     
-    if escolha_subida == "Declarar Estado de Atenção":
-        st.session_state['status_operacional'] = "Atencao"
-        st.success("🚨 **Estado de Atenção DECLARADO** conforme diretriz operacional.")
-        st.rerun()
-    else:
-        st.session_state['status_operacional'] = "Observacao"
-        st.warning("⚠️ **Estado de Observação MANTIDO** por decisão do operador.")
+    if st.button("Confirmar Decisão de Subida", key="btn_subida"):
+        if escolha_subida == "Declarar Estado de Atenção":
+            st.session_state['status_operacional'] = "Atencao"
+            st.success("🚨 **Estado de Atenção DECLARADO** com sucesso.")
+        else:
+            st.session_state['status_operacional'] = "Observacao"
+            st.warning("⚠️ **Estado de Observação MANTIDO** por decisão do operador.")
         st.rerun()
 
 elif st.session_state['status_operacional'] == "Atencao":
@@ -214,11 +214,15 @@ elif st.session_state['status_operacional'] == "Queda_Pendente":
         key="radio_decisao_queda"
     )
     
-    if escolha_queda == "Manter Nível de Atenção":
-        st.warning("🔒 **Nível de Atenção MANTIDO** por diretriz operacional do plantão, mesmo com a redução do índice.")
-    else:
-        st.session_state['status_operacional'] = "Observacao"
-        st.success("✅ **Retornado ao Estado de Observação** conforme decisão do operador em plantão.")
+    if st.button("Confirmar Decisão de Queda", key="btn_queda"):
+        if escolha_queda == "Manter Nível de Atenção":
+            # Força o status de volta para Atenção se o operador quiser manter
+            st.session_state['status_operacional'] = "Atencao"
+            st.warning("🔒 **Nível de Atenção MANTIDO** por diretriz operacional do plantão.")
+        else:
+            # Retorna limpo para Observação
+            st.session_state['status_operacional'] = "Observacao"
+            st.success("✅ **Retornado ao Estado de Observação** com sucesso.")
         st.rerun()
 
 else:
