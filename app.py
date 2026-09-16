@@ -9,7 +9,7 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Blindagem Total contra F5."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Estado de Observação Dinâmico."
 )
 
 # 1. Seleção do Mês e Ano de Referência
@@ -42,7 +42,6 @@ colunas_tabela_1 = horarios_3h + ["Total Diário"]
 if 'caderneta_manual' not in st.session_state:
     st.session_state['caderneta_manual'] = pd.DataFrame("", index=dias_mes, columns=colunas_tabela_1)
 else:
-    # Garante que todas as colunas existam sem apagar os dados salvos anteriormente
     for col in colunas_tabela_1:
         if col not in st.session_state['caderneta_manual'].columns:
             st.session_state['caderneta_manual'][col] = ""
@@ -57,11 +56,11 @@ st.sidebar.info(
     "**Orientações de Preenchimento:**\n"
     "• Insira os índices de chuva (mm) nos turnos da Tabela 1.\n"
     "• A coluna **Total Diário** calcula automaticamente a soma dos turnos.\n"
-    "• Os dados agora estão blindados e resistem ao F5."
+    "• Dados blindados contra atualizações de página (F5)."
 )
 
 st.subheader("📝 1. Tabela de Lançamento Manual e Total Diário (mm)")
-st.markdown("Digite os valores medidos em cada turno (a última coluna soma automaticamente o dia):")
+st.markdown("Digite os valores medidos em cada turno:")
 
 # Tabela interativa de lançamento manual vinculada estritamente à sessão
 df_editado = st.data_editor(
@@ -97,13 +96,11 @@ for dia in dias_mes:
             sequencia_calculo.append(0.0)
             lista_status_preenchimento.append(False)
             
-    # Atualiza dinamicamente o valor do Total Diário na própria Tabela 1
     if tem_dado_na_linha:
         df_editado.loc[dia, "Total Diário"] = f"{soma_linha_atual:.1f}"
     else:
         df_editado.loc[dia, "Total Diário"] = ""
 
-# Salva permanentemente as alterações no session_state após o cálculo
 st.session_state['caderneta_manual'] = df_editado
 
 serie_matematica = pd.Series(sequencia_calculo)
@@ -146,7 +143,7 @@ st.dataframe(df_mensal, use_container_width=True)
 st.markdown("---")
 st.subheader("🚨 Status Operacional Crítico (Morro do Saboó)")
 
-# --- LÓGICA DO AVISO DE ATENÇÃO EM AMARELO E PROTOCOLO DE QUEDA ---
+# --- LÓGICA DE EXIBIÇÃO: ATENÇÃO (EM AMARELO) VS OBSERVAÇÃO ---
 if max_72h_geral >= 80.0:
     st.session_state['atingiu_80mm'] = True
     st.markdown(
@@ -188,13 +185,8 @@ elif st.session_state['atingiu_80mm'] and max_72h_geral < 80.0 and teve_dado:
         st.success("✅ **Nível de Atenção CANCELADO** conforme decisão do operador em plantão. Retorno à observação normal.")
 
 else:
-    if max_72h_geral >= 50.0:
-        st.warning(
-            f"⚠️ **ESTADO DE ATENÇÃO:** Acumulado de 72h em **{max_72h_geral:.1f} mm**. "
-            "Monitoramento intensificado nas encostas."
-        )
-    else:
-        st.success(
-            f"✅ **ESTADO DE OBSERVAÇÃO:** Maior acumulado de 72h recente em **{max_72h_geral:.1f} mm**. "
-            "Índices dentro da normalidade operacional."
-        )
+    # Abaixo de 80mm exibe o Estado de Observação padrão
+    st.success(
+        f"✅ **ESTADO DE OBSERVAÇÃO:** Maior acumulado de 72h recente em **{max_72h_geral:.1f} mm** (menor que 80 mm). "
+        "Índices dentro da normalidade operacional para o Posto P6."
+    )
