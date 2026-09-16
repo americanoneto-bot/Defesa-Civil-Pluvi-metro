@@ -15,7 +15,7 @@ except:
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Gestão Bilateral de Alertas."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Transição Automática de Status."
 )
 
 # Horários de medição de 3 em 3 horas (Colunas)
@@ -135,12 +135,12 @@ for dia in dias_mes:
             
         idx_global += 1
 
-# --- MECANISMO DE TRANSIÇÃO ESTÁVEL (COM TRAVA DE ESTADO) ---
-# Só dispara pendência de subida se estivermos estritamente em Observação e o índice atingir >= 80
+# --- MECANISMO DE TRANSIÇÃO AUTOMÁTICA DE ESTADO ---
+# Se está em Observação e o índice atinge >= 80, aciona a pendência de subida
 if st.session_state['status_operacional'] == "Observacao" and max_72h_geral >= 80.0:
     st.session_state['status_operacional'] = "Subida_Pendente"
 
-# Só dispara pendência de queda se estivermos estritamente em Atencao e o índice cair para < 80
+# Se está em Atenção e o índice cai para < 80, aciona a pendência de queda
 elif st.session_state['status_operacional'] == "Atencao" and max_72h_geral < 80.0:
     st.session_state['status_operacional'] = "Queda_Pendente"
 
@@ -175,13 +175,13 @@ if st.session_state['status_operacional'] == "Subida_Pendente":
         key="radio_decisao_subida"
     )
     
-    if st.button("Confirmar Decisão de Subida", key="btn_subida"):
+    if st.button("Confirmar e Atualizar Status", key="btn_subida"):
         if escolha_subida == "Declarar Estado de Atenção":
             st.session_state['status_operacional'] = "Atencao"
-            st.success("🚨 **Estado de Atenção DECLARADO** com sucesso.")
+            st.success("🚨 **Estado de Atenção DECLARADO** automaticamente.")
         else:
             st.session_state['status_operacional'] = "Observacao"
-            st.warning("⚠️ **Estado de Observação MANTIDO** por decisão do operador.")
+            st.warning("⚠️ **Estado de Observação MANTIDO** automaticamente.")
         st.rerun()
 
 elif st.session_state['status_operacional'] == "Atencao":
@@ -214,15 +214,13 @@ elif st.session_state['status_operacional'] == "Queda_Pendente":
         key="radio_decisao_queda"
     )
     
-    if st.button("Confirmar Decisão de Queda", key="btn_queda"):
-        if escolha_queda == "Manter Nível de Atenção":
-            # Força o status de volta para Atenção se o operador quiser manter
-            st.session_state['status_operacional'] = "Atencao"
-            st.warning("🔒 **Nível de Atenção MANTIDO** por diretriz operacional do plantão.")
-        else:
-            # Retorna limpo para Observação
+    if st.button("Confirmar e Atualizar Status", key="btn_queda"):
+        if escolha_queda == "Retornar ao Estado de Observação":
             st.session_state['status_operacional'] = "Observacao"
-            st.success("✅ **Retornado ao Estado de Observação** com sucesso.")
+            st.success("✅ **Retornado automaticamente ao Estado de Observação**.")
+        else:
+            st.session_state['status_operacional'] = "Atencao"
+            st.warning("🔒 **Nível de Atenção MANTIDO** por diretriz operacional.")
         st.rerun()
 
 else:
