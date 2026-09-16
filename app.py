@@ -9,7 +9,7 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional Estável com Persistência Robusta."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Blindagem Total de Persistência de Dados."
 )
 
 # 1. Seleção do Mês e Ano de Referência
@@ -34,10 +34,10 @@ horarios_3h = [
     "18h", "21h", "00h", "03h (+1)"
 ]
 
-# Dias do mês de 01 a 31 (Linhas) - Garantindo formato string de 2 dígitos
+# Dias do mês de 01 a 31 (Linhas)
 dias_mes = [f"{i:02d}" for i in range(1, 32)]
 
-# Inicialização estrita do session_state para resistir a atualizações de página (F5)
+# --- BLINDAGEM DA PERSISTÊNCIA (SESSION STATE) ---
 if 'caderneta_manual' not in st.session_state:
     st.session_state['caderneta_manual'] = pd.DataFrame("", index=dias_mes, columns=horarios_3h)
 
@@ -50,34 +50,34 @@ st.sidebar.header("⚙️ Controles Operacionais")
 st.sidebar.info(
     "**Orientações de Preenchimento:**\n"
     "• Insira os índices de chuva (mm) na Tabela 1.\n"
-    "• Os dados inseridos ficam salvos na sessão e resistem a atualizações (F5).\n"
+    "• Os dados inseridos estão blindados e resistem a atualizações de página (F5).\n"
     "• O painel emitirá o alerta de atenção em amarelo ao atingir 80 mm em 72h."
 )
 
 st.subheader("📝 1. Tabela de Lançamento Manual (Índices em mm)")
 st.markdown("Digite os valores medidos em cada turno:")
 
-# Componente de edição blindado garantindo leitura do session_state atualizado
+# Tabela interativa com persistência absoluta vinculada ao session_state
 df_editado = st.data_editor(
     st.session_state['caderneta_manual'],
     use_container_width=True,
     key="editor_caderneta_estavel"
 )
 
-# Atualiza imediatamente o session_state com o que o operador digitou
+# Atualiza e consolida permanentemente os dados na sessão
 st.session_state['caderneta_manual'] = df_editado
 
-# --- PROCESSAMENTO MATEMÁTICO BLINDADO (Incluindo o dia 04 e demais) ---
+# --- PROCESSAMENTO MATEMÁTICO DE PRECISÃO (Incluindo dia 04 e demais) ---
 sequencia_calculo = []
 lista_status_preenchimento = []
 teve_dado = False
 
 for dia in dias_mes:
     for h in horarios_3h:
-        # Garante a captura correta do valor mesmo após o F5
         val = df_editado.loc[dia, h]
         if val is not None and str(val).strip() != "" and str(val).lower() != "nan":
             try:
+                # Converte substituta de vírgula para ponto caso o operador digite com vírgula
                 val_num = float(str(val).replace(',', '.'))
                 sequencia_calculo.append(val_num)
                 lista_status_preenchimento.append(True)
