@@ -9,7 +9,7 @@ st.set_page_config(
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Gestão de Alerta e Queda."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Monitoramento Global de Queda."
 )
 
 # 1. Seleção do Mês e Ano de Referência
@@ -38,7 +38,7 @@ horarios_3h = [
 dias_mes = [f"{i:02d}" for i in range(1, 32)]
 colunas_tabela_1 = horarios_3h + ["Total Diário"]
 
-# --- BLINDAGEM ABSOLUTA DE PERSISTÊNCIA E STATUS ---
+# --- BLINDAGEM ABSOLUTA DE PERSISTÊNCIA E ESTADO ---
 if 'caderneta_manual' not in st.session_state:
     st.session_state['caderneta_manual'] = pd.DataFrame("", index=dias_mes, columns=colunas_tabela_1)
 else:
@@ -46,20 +46,20 @@ else:
         if col not in st.session_state['caderneta_manual'].columns:
             st.session_state['caderneta_manual'][col] = ""
 
-# Inicializa a máquina de estados operacional se não existir
+# Inicializa o controle de estado operacional na sessão se não existir
 if 'status_operacional' not in st.session_state:
-    st.session_state['status_operacional'] = "Normal"  # Pode ser "Normal", "Atencao" ou "Queda_Pendente"
+    st.session_state['status_operacional'] = "Observacao"
 
 st.sidebar.header("⚙️ Controles Operacionais")
 st.sidebar.info(
     "**Orientações de Preenchimento:**\n"
-    "• Insira os índices de chuva (mm) nos turnos da Tabela 1.\n"
+    "• Insira os índices de chuva (mm) em qualquer célula da Tabela 1.\n"
     "• A coluna **Total Diário** calcula automaticamente a soma dos turnos.\n"
     "• Dados blindados contra atualizações de página (F5)."
 )
 
 st.subheader("📝 1. Tabela de Lançamento Manual e Total Diário (mm)")
-st.markdown("Digite os valores medidos em cada turno:")
+st.markdown("Digite os valores medidos em qualquer turno da tabela:")
 
 # Tabela interativa de lançamento manual vinculada estritamente à sessão
 df_editado = st.data_editor(
@@ -129,11 +129,13 @@ for dia in dias_mes:
             
         idx_global += 1
 
-# --- ATUALIZAÇÃO INTELIGENTE DA MÁQUINA DE ESTADOS ---
+# --- MECANISMO GLOBAL DE TRANSIÇÃO DE ESTADO ---
+# Se o acumulado atinge ou passa de 80mm, o status passa obrigatoriamente para "Atencao"
 if max_72h_geral >= 80.0:
     st.session_state['status_operacional'] = "Atencao"
+# Se o status estava em Atenção, mas por qualquer alteração o índice máximo caiu abaixo de 80mm,
+# o sistema transita obrigatoriamente para "Queda_Pendente" para exigir a decisão do operador.
 elif st.session_state['status_operacional'] == "Atencao" and max_72h_geral < 80.0:
-    # Se estava em atenção e o índice caiu abaixo de 80, muda para Queda Pendente de Decisão
     st.session_state['status_operacional'] = "Queda_Pendente"
 
 st.markdown("---")
@@ -147,7 +149,7 @@ st.dataframe(df_mensal, use_container_width=True)
 st.markdown("---")
 st.subheader("🚨 Status Operacional Crítico (Morro do Saboó)")
 
-# --- RENDERIZAÇÃO VISUAL BASEADA NO ESTADO ATUAL ---
+# --- RENDERIZAÇÃO OBRIGATÓRIA DOS ESTADOS ---
 if st.session_state['status_operacional'] == "Atencao":
     st.markdown(
         """
@@ -165,7 +167,7 @@ elif st.session_state['status_operacional'] == "Queda_Pendente":
         """
         <div style="background-color: #fff9c4; padding: 20px; border-radius: 10px; text-align: center; color: #333333; border: 1px solid #fbc02d;">
             <h2 style="margin: 0; font-size: 28px; font-weight: bold;">⚠️ ATENÇÃO: QUEDA NO ACUMULADO</h2>
-            <p style="margin: 5px 0 0 0; font-size: 16px;">O índice de 72h baixou para <b>{:.1f} mm</b> (abaixo de 80 mm).</p>
+            <p style="margin: 5px 0 0 0; font-size: 16px;">O índice máximo de 72h recuou para <b>{:.1f} mm</b> (abaixo de 80 mm).</p>
             <p style="margin: 5px 0 0 0; font-size: 15px;">Estado de Atenção : Vistoria de campo para avaliação de riscos.</p>
         </div>
         """.format(max_72h_geral),
@@ -182,13 +184,13 @@ elif st.session_state['status_operacional'] == "Queda_Pendente":
     if escolha == "Manter Nível de Atenção":
         st.warning("🔒 **Nível de Atenção MANTIDO** por diretriz operacional do plantão, mesmo com a redução momentânea do índice.")
     else:
-        # Operador escolheu retornar ao normal
-        st.session_state['status_operacional'] = "Normal"
+        # Operador decide retornar ao normal
+        st.session_state['status_operacional'] = "Observacao"
         st.success("✅ **Retornado ao Estado de Observação** conforme decisão do operador em plantão.")
         st.rerun()
 
 else:
-    # Estado Normal / Observação
+    # Estado de Observação / Normalidade
     if max_72h_geral >= 50.0:
         st.warning(
             f"⚠️ **ESTADO DE ATENÇÃO (Parcial):** Acumulado de 72h em **{max_72h_geral:.1f} mm**. "
