@@ -15,7 +15,7 @@ except:
 
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Gestão Bilateral de Alertas."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Monitoramento da Última Célula."
 )
 
 # Horários de medição de 3 em 3 horas (Colunas)
@@ -117,6 +117,7 @@ df_mensal = pd.DataFrame("", index=dias_mes, columns=horarios_3h)
 
 idx_global = 0
 max_72h_geral = 0.0
+ultimo_val_72h = 0.0
 
 for dia in dias_mes:
     for h in horarios_3h:
@@ -127,6 +128,9 @@ for dia in dias_mes:
             df_72h.loc[dia, h] = f"{val_72:.1f}"
             df_mensal.loc[dia, h] = f"{val_mes:.1f}"
             
+            # Armazena o valor de 72h da última célula preenchida cronologicamente
+            ultimo_val_72h = val_72
+            
             if val_72 > max_72h_geral:
                 max_72h_geral = val_72
         else:
@@ -135,14 +139,14 @@ for dia in dias_mes:
             
         idx_global += 1
 
-# --- MECANISMO DE TRANSIÇÃO AUTOMÁTICA DE ESTADO ---
-# Só dispara pendência de subida se o status atual for Observacao e o acumulado atingir >= 80
-if st.session_state['status_operacional'] == "Observacao" and max_72h_geral >= 80.0:
-    st.session_state['status_operacional'] = "Subida_Pendente"
+# --- MECANISMO BASEADO NA ÚLTIMA CÉLULA PREENCHIDA ---
+# Se a última célula preenchida baixou de 80 mm, o sistema retorna imediatamente para Observação
+if ultimo_val_72h < 80.0 and st.session_state['status_operacional'] == "Atencao":
+    st.session_state['status_operacional'] = "Observacao"
 
-# Só dispara pendência de queda se o status atual for Atencao e o acumulado cair para < 80
-elif st.session_state['status_operacional'] == "Atencao" and max_72h_geral < 80.0:
-    st.session_state['status_operacional'] = "Queda_Pendente"
+# Se a última célula preenchida atingiu >= 80 mm e estávamos em observação, abre a subida pendente
+elif st.session_state['status_operacional'] == "Observacao" and ultimo_val_72h >= 80.0:
+    st.session_state['status_operacional'] = "Subida_Pendente"
 
 st.markdown("---")
 st.subheader("📊 2. Acumulado de 72h por Turno (Cálculo Automático)")
@@ -155,16 +159,16 @@ st.dataframe(df_mensal, use_container_width=True)
 st.markdown("---")
 st.subheader("🚨 Status Operacional Crítico (Morro do Saboó)")
 
-# --- RENDERIZAÇÃO DOS ESTADOS E COMANDOS INTERATIVOS ---
+# --- RENDERIZAÇÃO DOS ESTADOS ---
 
 if st.session_state['status_operacional'] == "Subida_Pendente":
     st.markdown(
         """
         <div style="background-color: #ffeb3b; padding: 20px; border-radius: 10px; text-align: center; color: #333333; border: 2px solid #fbc02d;">
             <h2 style="margin: 0; font-size: 28px; font-weight: bold;">⚠️ ATENÇÃO: PATAMAR DE 80 MM ATINGIDO</h2>
-            <p style="margin: 5px 0 0 0; font-size: 16px;">O índice máximo de 72h chegou a <b>{:.1f} mm</b> (critério de alerta atingido).</p>
+            <p style="margin: 5px 0 0 0; font-size: 16px;">O acumulado de 72h na última medição chegou a <b>{:.1f} mm</b>.</p>
         </div>
-        """.format(max_72h_geral),
+        """.format(ultimo_val_72h),
         unsafe_allow_html=True
     )
     
@@ -189,43 +193,16 @@ elif st.session_state['status_operacional'] == "Atencao":
         """
         <div style="background-color: #ffeb3b; padding: 25px; border-radius: 10px; text-align: center; color: #333333; border: 2px solid #fbc02d;">
             <h1 style="margin: 0; font-size: 42px; font-weight: bold;">⚠️ ATENÇÃO ⚠️</h1>
-            <h3 style="margin: 10px 0 0 0; font-size: 22px;">O acumulado de 72h está em patamar crítico (<b>{:.1f} mm</b>).</h3>
+            <h3 style="margin: 10px 0 0 0; font-size: 22px;">O acumulado de 72h na última medição está em <b>{:.1f} mm</b>.</h3>
             <p style="margin: 8px 0 0 0; font-size: 17px; font-weight: 500;">Estado de Atenção : Vistoria de campo para avaliação de riscos.</p>
         </div>
-        """.format(max_72h_geral),
+        """.format(ultimo_val_72h),
         unsafe_allow_html=True
     )
-
-elif st.session_state['status_operacional'] == "Queda_Pendente":
-    st.markdown(
-        """
-        <div style="background-color: #fff9c4; padding: 20px; border-radius: 10px; text-align: center; color: #333333; border: 1px solid #fbc02d;">
-            <h2 style="margin: 0; font-size: 28px; font-weight: bold;">⚠️ ATENÇÃO: QUEDA NO ACUMULADO</h2>
-            <p style="margin: 5px 0 0 0; font-size: 16px;">O índice máximo de 72h recuou para <b>{:.1f} mm</b> (abaixo de 80 mm).</p>
-        </div>
-        """.format(max_72h_geral),
-        unsafe_allow_html=True
-    )
-    
-    st.markdown("### 🎛️ Decisão de Protocolo Operacional (Queda):")
-    escolha_queda = st.radio(
-        "O acumulado reduziu abaixo do patamar crítico. Deseja retornar ao Estado de Observação ou manter o Nível de Atenção?",
-        ["Retornar ao Estado de Observação", "Manter Nível de Atenção"],
-        key="radio_decisao_queda"
-    )
-    
-    if st.button("Confirmar e Atualizar Status", key="btn_queda"):
-        if escolha_queda == "Retornar ao Estado de Observação":
-            st.session_state['status_operacional'] = "Observacao"
-            st.success("✅ **Retornado automaticamente ao Estado de Observação**.")
-        else:
-            st.session_state['status_operacional'] = "Atencao"
-            st.warning("🔒 **Nível de Atenção MANTIDO** por diretriz operacional.")
-        st.rerun()
 
 else:
-    # Estado Operacional Oficial: Observação / Normalidade
+    # Status Operacional Oficial: Observação / Normalidade (Exibido em verde imediatamente se a última célula for < 80)
     st.success(
-        f"✅ **ESTADO DE OBSERVAÇÃO:** Maior acumulado de 72h recente em **{max_72h_geral:.1f} mm**. "
+        f"✅ **ESTADO DE OBSERVAÇÃO:** Acumulado de 72h na última medição em **{ultimo_val_72h:.1f} mm** (abaixo de 80 mm). "
         "Índices dentro da normalidade operacional para o Posto P6."
     )
