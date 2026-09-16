@@ -7,10 +7,37 @@ st.set_page_config(
     layout="wide",
 )
 
+# --- INSERÇÃO DO LOGO OFICIAL DA DEFESA CIVIL ---
+try:
+    st.image("logo_defesa_civil.jpg", width=120)
+except:
+    pass
+
 st.title("🛡️ Defesa Civil de Santos | Posto Morro do Saboó (P6)")
 st.markdown(
-    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Monitoramento Global de Queda."
+    "**Caderneta Mensal de Observação de Precipitação** — Módulo Operacional com Gestão Bilateral de Alertas."
 )
+
+# Horários de medição de 3 em 3 horas (Colunas)
+horarios_3h = [
+    "06h", "09h", "12h", "15h", 
+    "18h", "21h", "00h", "03h (+1)"
+]
+
+# Dias do mês de 01 a 31 (Linhas)
+dias_mes = [f"{i:02d}" for i in range(1, 32)]
+colunas_tabela_1 = horarios_3h + ["Total Diário"]
+
+# --- BLINDAGEM ABSOLUTA DE PERSISTÊNCIA (CONTRA F5) ---
+if 'caderneta_manual' not in st.session_state:
+    st.session_state['caderneta_manual'] = pd.DataFrame("", index=dias_mes, columns=colunas_tabela_1)
+else:
+    for col in colunas_tabela_1:
+        if col not in st.session_state['caderneta_manual'].columns:
+            st.session_state['caderneta_manual'][col] = ""
+
+if 'status_operacional' not in st.session_state:
+    st.session_state['status_operacional'] = "Observacao"
 
 # 1. Seleção do Mês e Ano de Referência
 col_mes1, col_mes2 = st.columns([2, 4])
@@ -28,34 +55,12 @@ with col_mes2:
 
 st.markdown(f"### 📋 Posto do Saboó / P6 — Mês: **{mes_referencia} / {ano_referencia}**")
 
-# Horários de medição de 3 em 3 horas (Colunas)
-horarios_3h = [
-    "06h", "09h", "12h", "15h", 
-    "18h", "21h", "00h", "03h (+1)"
-]
-
-# Dias do mês de 01 a 31 (Linhas)
-dias_mes = [f"{i:02d}" for i in range(1, 32)]
-colunas_tabela_1 = horarios_3h + ["Total Diário"]
-
-# --- BLINDAGEM ABSOLUTA DE PERSISTÊNCIA E ESTADO ---
-if 'caderneta_manual' not in st.session_state:
-    st.session_state['caderneta_manual'] = pd.DataFrame("", index=dias_mes, columns=colunas_tabela_1)
-else:
-    for col in colunas_tabela_1:
-        if col not in st.session_state['caderneta_manual'].columns:
-            st.session_state['caderneta_manual'][col] = ""
-
-# Inicializa o controle de estado operacional na sessão se não existir
-if 'status_operacional' not in st.session_state:
-    st.session_state['status_operacional'] = "Observacao"
-
 st.sidebar.header("⚙️ Controles Operacionais")
 st.sidebar.info(
     "**Orientações de Preenchimento:**\n"
     "• Insira os índices de chuva (mm) em qualquer célula da Tabela 1.\n"
     "• A coluna **Total Diário** calcula automaticamente a soma dos turnos.\n"
-    "• Dados blindados contra atualizações de página (F5)."
+    "• **Dados blindados:** resistem a atualizações de página (F5)."
 )
 
 st.subheader("📝 1. Tabela de Lançamento Manual e Total Diário (mm)")
@@ -67,6 +72,9 @@ df_editado = st.data_editor(
     use_container_width=True,
     key="editor_caderneta_estavel"
 )
+
+# Atualiza imediatamente o session_state com o que foi digitado
+st.session_state['caderneta_manual'] = df_editado
 
 # --- PROCESSAMENTO MATEMÁTICO DE PRECISÃO ---
 sequencia_calculo = []
@@ -98,8 +106,6 @@ for dia in dias_mes:
     else:
         df_editado.loc[dia, "Total Diário"] = ""
 
-st.session_state['caderneta_manual'] = df_editado
-
 serie_matematica = pd.Series(sequencia_calculo)
 
 # Executa os cálculos contínuos globais (janela de 72h = 24 turnos)
@@ -129,12 +135,12 @@ for dia in dias_mes:
             
         idx_global += 1
 
-# --- MECANISMO GLOBAL DE TRANSIÇÃO DE ESTADO ---
-# Se o acumulado atinge ou passa de 80mm, o status passa obrigatoriamente para "Atencao"
-if max_72h_geral >= 80.0:
-    st.session_state['status_operacional'] = "Atencao"
-# Se o status estava em Atenção, mas por qualquer alteração o índice máximo caiu abaixo de 80mm,
-# o sistema transita obrigatoriamente para "Queda_Pendente" para exigir a decisão do operador.
+# --- MECANISMO BILATERAL DE TRANSIÇÃO DE ESTADO ---
+# 1. Se estava em Observação e o acumulado atinge >= 80mm -> Ativa Subida Pendente
+if st.session_state['status_operacional'] == "Observacao" and max_72h_geral >= 80.0:
+    st.session_state['status_operacional'] = "Subida_Pendente"
+
+# 2. Se estava em Atenção e o acumulado cai para < 80mm -> Ativa Queda Pendente
 elif st.session_state['status_operacional'] == "Atencao" and max_72h_geral < 80.0:
     st.session_state['status_operacional'] = "Queda_Pendente"
 
@@ -149,16 +155,44 @@ st.dataframe(df_mensal, use_container_width=True)
 st.markdown("---")
 st.subheader("🚨 Status Operacional Crítico (Morro do Saboó)")
 
-# --- RENDERIZAÇÃO OBRIGATÓRIA DOS ESTADOS ---
-if st.session_state['status_operacional'] == "Atencao":
+# --- RENDERIZAÇÃO DOS ESTADOS E COMANDOS INTERATIVOS ---
+
+if st.session_state['status_operacional'] == "Subida_Pendente":
+    st.markdown(
+        """
+        <div style="background-color: #ffeb3b; padding: 20px; border-radius: 10px; text-align: center; color: #333333; border: 2px solid #fbc02d;">
+            <h2 style="margin: 0; font-size: 28px; font-weight: bold;">⚠️ ATENÇÃO: PATAMAR DE 80 MM ATINGIDO</h2>
+            <p style="margin: 5px 0 0 0; font-size: 16px;">O índice máximo de 72h chegou a <b>{:.1f} mm</b> (critério de alerta atingido).</p>
+        </div>
+        """.format(max_72h_geral),
+        unsafe_allow_html=True
+    )
+    
+    st.markdown("### 🎛️ Decisão de Protocolo Operacional (Subida):")
+    escolha_subida = st.radio(
+        "O acumulado atingiu o patamar crítico. Deseja declarar Estado de Atenção ou Manter Observação?",
+        ["Declarar Estado de Atenção", "Manter Estado de Observação"],
+        key="radio_decisao_subida"
+    )
+    
+    if escolha_subida == "Declarar Estado de Atenção":
+        st.session_state['status_operacional'] = "Atencao"
+        st.success("🚨 **Estado de Atenção DECLARADO** conforme diretriz operacional.")
+        st.rerun()
+    else:
+        st.session_state['status_operacional'] = "Observacao"
+        st.warning("⚠️ **Estado de Observação MANTIDO** por decisão do operador.")
+        st.rerun()
+
+elif st.session_state['status_operacional'] == "Atencao":
     st.markdown(
         """
         <div style="background-color: #ffeb3b; padding: 25px; border-radius: 10px; text-align: center; color: #333333; border: 2px solid #fbc02d;">
             <h1 style="margin: 0; font-size: 42px; font-weight: bold;">⚠️ ATENÇÃO ⚠️</h1>
-            <h3 style="margin: 10px 0 0 0; font-size: 22px;">O acumulado de 72h atingiu o patamar de <b>80.0 mm</b>!</h3>
+            <h3 style="margin: 10px 0 0 0; font-size: 22px;">O acumulado de 72h está em patamar crítico (<b>{:.1f} mm</b>).</h3>
             <p style="margin: 8px 0 0 0; font-size: 17px; font-weight: 500;">Estado de Atenção : Vistoria de campo para avaliação de riscos.</p>
         </div>
-        """,
+        """.format(max_72h_geral),
         unsafe_allow_html=True
     )
 
@@ -168,29 +202,26 @@ elif st.session_state['status_operacional'] == "Queda_Pendente":
         <div style="background-color: #fff9c4; padding: 20px; border-radius: 10px; text-align: center; color: #333333; border: 1px solid #fbc02d;">
             <h2 style="margin: 0; font-size: 28px; font-weight: bold;">⚠️ ATENÇÃO: QUEDA NO ACUMULADO</h2>
             <p style="margin: 5px 0 0 0; font-size: 16px;">O índice máximo de 72h recuou para <b>{:.1f} mm</b> (abaixo de 80 mm).</p>
-            <p style="margin: 5px 0 0 0; font-size: 15px;">Estado de Atenção : Vistoria de campo para avaliação de riscos.</p>
         </div>
         """.format(max_72h_geral),
         unsafe_allow_html=True
     )
     
-    st.markdown("### 🎛️ Decisão de Protocolo Operacional:")
-    escolha = st.radio(
+    st.markdown("### 🎛️ Decisão de Protocolo Operacional (Queda):")
+    escolha_queda = st.radio(
         "O acumulado reduziu abaixo do patamar crítico. Deseja retornar ao Estado de Observação ou manter o Nível de Atenção?",
         ["Retornar ao Estado de Observação", "Manter Nível de Atenção"],
-        key="radio_decisao_atencao"
+        key="radio_decisao_queda"
     )
     
-    if escolha == "Manter Nível de Atenção":
-        st.warning("🔒 **Nível de Atenção MANTIDO** por diretriz operacional do plantão, mesmo com a redução momentânea do índice.")
+    if escolha_queda == "Manter Nível de Atenção":
+        st.warning("🔒 **Nível de Atenção MANTIDO** por diretriz operacional do plantão, mesmo com a redução do índice.")
     else:
-        # Operador decide retornar ao normal
         st.session_state['status_operacional'] = "Observacao"
         st.success("✅ **Retornado ao Estado de Observação** conforme decisão do operador em plantão.")
         st.rerun()
 
 else:
-    # Estado de Observação / Normalidade
     if max_72h_geral >= 50.0:
         st.warning(
             f"⚠️ **ESTADO DE ATENÇÃO (Parcial):** Acumulado de 72h em **{max_72h_geral:.1f} mm**. "
